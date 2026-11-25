@@ -1,5 +1,6 @@
 import { assets } from '../assets/AssetLoader';
 import { audio } from '../audio/AudioManager';
+import { mapClientToCanvas } from '../utils/viewport';
 
 interface StrokePt {
   x: number;
@@ -72,13 +73,8 @@ export class MaLiangPad {
   }
 
   private bindEvents(): void {
-    const getPos = (e: PointerEvent): StrokePt => {
-      const r = this.canvas.getBoundingClientRect();
-      return {
-        x: ((e.clientX - r.left) / Math.max(1, r.width)) * this.canvas.width,
-        y: ((e.clientY - r.top) / Math.max(1, r.height)) * this.canvas.height,
-      };
-    };
+    const getPos = (e: PointerEvent): StrokePt =>
+      mapClientToCanvas(this.canvas, e.clientX, e.clientY, this.canvas.width, this.canvas.height);
 
     this.canvas.addEventListener('pointerdown', (e) => {
       e.preventDefault();

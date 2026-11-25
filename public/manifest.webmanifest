@@ -1,0 +1,16 @@
+{
+  "name": "植物大战僵尸 · 融合版 4.1",
+  "short_name": "PVZ融合版",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    {
+      "src": "./assets/bullets/sun.webp",
+      "sizes": "192x192",
+      "type": "image/webp"
+    }
+  ]
+}

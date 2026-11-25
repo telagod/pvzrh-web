@@ -22,6 +22,7 @@ import type {
 } from '../types/game';
 import { getPlantBehavior, getZombieBehavior } from './BehaviorRegistry';
 import { fusionSystem } from './FusionSystem';
+import { mapClientToCanvas } from '../utils/viewport';
 
 export const VIEW_W = 1066;
 export const VIEW_H = 600;
@@ -1360,11 +1361,8 @@ export class BoardEngine {
 
   private bindInput(canvas: HTMLCanvasElement): void {
     const mapPoint = (e: PointerEvent): { sx: number; sy: number } => {
-      const rect = canvas.getBoundingClientRect();
-      return {
-        sx: ((e.clientX - rect.left) / Math.max(1, rect.width)) * VIEW_W,
-        sy: ((e.clientY - rect.top) / Math.max(1, rect.height)) * VIEW_H,
-      };
+      const pt = mapClientToCanvas(canvas, e.clientX, e.clientY, VIEW_W, VIEW_H);
+      return { sx: pt.x, sy: pt.y };
     };
 
     const onMove = (e: PointerEvent) => {

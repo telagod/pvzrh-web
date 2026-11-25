@@ -9,6 +9,7 @@ import type { LevelTab } from './ui/LevelSelect';
 import { MainMenu } from './ui/MainMenu';
 import { SeedChooser } from './ui/SeedChooser';
 import { getTowerDefenseLevels } from './ui/towerCatalog';
+import { tryLockLandscape } from './utils/viewport';
 import {
   buildIzBoardConfig,
   buildRecommendedDeck,
@@ -52,14 +53,44 @@ class PvzWebApp {
 
   private bindProportionalUiScaler(): void {
     const syncScale = () => {
-      const w = this.stageShell.clientWidth || 1066;
-      this.stageShell.style.setProperty('--ui-scale', String(w / 1066));
+      const vw = Math.round(window.visualViewport?.width ?? window.innerWidth);
+      const vh = Math.round(window.visualViewport?.height ?? window.innerHeight);
+      document.documentElement.style.setProperty('--vw', `${vw}px`);
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+      const isPortrait = vh > vw;
+      const isMobileLike =
+        (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches) ||
+        navigator.maxTouchPoints > 0 ||
+        vw <= 900;
+      document.body.classList.toggle('force-landscape', isPortrait && isMobileLike);
+
+      const updateUiVar = () => {
+        const w = this.stageShell.clientWidth || 1066;
+        this.stageShell.style.setProperty('--ui-scale', String(w / 1066));
+      };
+      updateUiVar();
+      requestAnimationFrame(updateUiVar);
     };
     syncScale();
+    tryLockLandscape();
     if (typeof ResizeObserver !== 'undefined') {
-      new ResizeObserver(syncScale).observe(this.stageShell);
+      new ResizeObserver(() => {
+        const w = this.stageShell.clientWidth || 1066;
+        this.stageShell.style.setProperty('--ui-scale', String(w / 1066));
+      }).observe(this.stageShell);
     }
     window.addEventListener('resize', syncScale);
+    window.addEventListener('orientationchange', syncScale);
+    window.visualViewport?.addEventListener('resize', syncScale);
+    window.addEventListener(
+      'pointerdown',
+      () => {
+        if (document.body.classList.contains('force-landscape') || navigator.maxTouchPoints > 0) {
+          tryLockLandscape();
+        }
+      },
+      { passive: true },
+    );
   }
 
   private showBootLoader(ratio: number, label: string): void {
