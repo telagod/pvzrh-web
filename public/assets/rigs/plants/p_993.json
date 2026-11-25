@@ -1,0 +1,1 @@
+{"ppu":100,"atlas":"assets/rigs/plants/p_993.webp","atlasW":176,"atlasH":164,"shootNodes":[],"sprites":[{"x":2,"y":2,"w":141,"h":160,"px":0.5,"py":0.15,"ppu":100}],"nodes":[{"id":0,"parent":-1,"name":"root","x":0,"y":0,"rot":0,"sx":0.65,"sy":0.65,"a":1,"sp":0,"order":1,"al":1,"fx":0,"fy":0}],"clips":{},"anchor":[0,15.6]}
