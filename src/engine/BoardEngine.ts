@@ -35,6 +35,9 @@ export const UNITY_ENTITY_SCALE = 0.62;
 const CAM_X_CHOOSER = 334;
 const CAM_X_BATTLE = 135;
 
+const DIFF_HP_SCALE = [0.85, 1.0, 1.15, 1.3, 1.5];
+const DIFF_COUNT_SCALE = [0.75, 1.0, 1.25, 1.55, 1.9];
+
 export interface TileSlotState {
   row: number;
   col: number;
@@ -272,6 +275,9 @@ export class BoardEngine {
   private currentWave = 0;
   private waveTimer = 0;
   private waveBudgetRemaining = 0;
+  private waveSpawnCooldown = 0;
+  private currentWaveIsHuge = false;
+  private pendingZombieSpawns = 0;
   private skySunTimer = 6.5;
   private totalSpawnedZombies = 0;
   private kills = 0;
@@ -482,7 +488,7 @@ export class BoardEngine {
       this.phase = 'playing';
       this.camX = CAM_X_BATTLE;
       this.targetCamX = CAM_X_BATTLE;
-      this.waveTimer = Math.min(this.config.firstWaveDelay, 6);
+      this.waveTimer = Math.min(this.config.firstWaveDelay, 12);
       if (this.config.conveyorMode && !this.config.vasebreakerConfig && this.conveyorPool.length > 0) {
         this.pushConveyorCard(0.0);
         this.pushConveyorCard(0.14);
@@ -1215,6 +1221,10 @@ export class BoardEngine {
   }
 
   /** Spawns a zombie immediately (used by Sandbox / E2E tests as well as waves). */
+  private getDiffIdx(): number {
+    return Math.max(0, Math.min(4, Math.floor(this.config.difficulty || 2) - 1));
+  }
+
   async spawnZombieAt(zombieId: number, row?: number, startX?: number): Promise<void> {
     if (this.destroyed) return;
     const zDef = assets.getZombie(zombieId) ?? assets.getZombie(0);
@@ -1239,7 +1249,13 @@ export class BoardEngine {
     }
     targetRow = Math.max(0, Math.min(this.rows - 1, targetRow));
 
-    const rigData = await assets.loadZombieRig(zombieId);
+    this.pendingZombieSpawns++;
+    let rigData: LoadedRig | null = null;
+    try {
+      rigData = await assets.loadZombieRig(zombieId);
+    } finally {
+      this.pendingZombieSpawns = Math.max(0, this.pendingZombieSpawns - 1);
+    }
     if (this.destroyed) return;
 
     const x =
@@ -1259,7 +1275,7 @@ export class BoardEngine {
         ? 1
         : this.config.zombieHpMult *
           (this.config.modifiers?.zombieHpBonusMult ?? 1) *
-          (0.75 + this.config.difficulty * 0.15);
+          DIFF_HP_SCALE[this.getDiffIdx()];
     const armorScale = hpScale * (this.config.modifiers?.zombieArmorMult ?? 1);
     const maxHp = Math.round(zDef.hp * hpScale);
     const leaderExtra =
@@ -2229,13 +2245,15 @@ export class BoardEngine {
     const aliveHostiles = this.zombies.filter((z) => !z.dying && !z.hypnotized && !z.removed).length;
 
     if (this.currentWave >= maxWaves) {
-      if (aliveHostiles === 0 && this.waveBudgetRemaining <= 0) {
+      if (aliveHostiles === 0 && this.pendingZombieSpawns === 0 && this.waveBudgetRemaining <= 0) {
         if (this.config.endless) {
           this.endlessTotalWavesCleared += this.currentWave;
           saveManager.recordSurvivalRound(this.config.levelKey, this.endlessRound);
           this.endlessRound += 1;
           this.currentWave = 0;
           this.waveBudgetRemaining = 0;
+          this.waveSpawnCooldown = 0;
+          this.currentWaveIsHuge = false;
           this.phase = 'choosing';
           this.targetCamX = CAM_X_CHOOSER;
           this.selectedCardIndex = -1;
@@ -2257,22 +2275,36 @@ export class BoardEngine {
       return;
     }
 
-    // Spawn queued wave zombies smoothly
+    // Staggered budget-based zombie spawning
     if (this.waveBudgetRemaining > 0) {
-      const spawnRate = Math.min(3, Math.ceil(this.waveBudgetRemaining * dt * 1.4));
-      if (Math.random() < dt * 2.5 || aliveHostiles === 0) {
-        const zId = this.pickZombieForWave();
-        const costVal = Math.max(25, assets.getZombie(zId)?.val ?? 50);
-        this.waveBudgetRemaining = Math.max(0, this.waveBudgetRemaining - Math.max(25, costVal / 2));
-        void this.spawnZombieAt(zId);
-        if (spawnRate > 1 && this.waveBudgetRemaining > 50) {
-          void this.spawnZombieAt(this.pickZombieForWave());
+      this.waveSpawnCooldown -= dt;
+      if (this.waveSpawnCooldown <= 0) {
+        const zId = this.pickZombieForWave(this.waveBudgetRemaining);
+        const costVal = Math.max(50, assets.getZombie(zId)?.val ?? 50);
+        this.waveBudgetRemaining -= costVal;
+        if (this.waveBudgetRemaining < 50) {
+          this.waveBudgetRemaining = 0;
         }
+        void this.spawnZombieAt(zId);
+        this.waveSpawnCooldown = this.currentWaveIsHuge
+          ? 0.55 + Math.random() * 0.45
+          : 1.2 + Math.random() * 0.9;
       }
     }
 
+    // Early-clear breather when current wave zombies are all defeated
+    if (
+      this.currentWave > 0 &&
+      aliveHostiles === 0 &&
+      this.pendingZombieSpawns === 0 &&
+      this.waveBudgetRemaining <= 0 &&
+      this.waveTimer > 4
+    ) {
+      this.waveTimer = 4.0;
+    }
+
     this.waveTimer -= dt;
-    if (this.waveTimer <= 0 || (this.currentWave > 0 && aliveHostiles === 0 && this.waveBudgetRemaining <= 0 && this.waveTimer < 14)) {
+    if (this.waveTimer <= 0) {
       this.currentWave++;
       const isHuge = this.currentWave === maxWaves || (maxWaves >= 10 && this.currentWave % 10 === 0);
       const isFinal = this.currentWave === maxWaves;
@@ -2288,25 +2320,41 @@ export class BoardEngine {
         audio.playSfx('HugeWave', 0.9, 500);
       }
 
-      const diffMult = 0.7 + this.config.difficulty * 0.25;
-      const roundScale = this.config.endless ? 1 + (this.endlessRound - 1) * 0.35 : 1;
+      const diffMult = DIFF_COUNT_SCALE[this.getDiffIdx()];
+      const roundScale = this.config.endless ? 1 + (this.endlessRound - 1) * 0.4 : 1;
       const totalWaveNum = (this.endlessRound - 1) * maxWaves + this.currentWave;
-      this.waveBudgetRemaining = Math.round(
-        (45 + totalWaveNum * 38) * (isHuge ? 2.1 : 1) * diffMult * roundScale,
-      );
-      if (isFinal) {
-        this.waveTimer = 30;
-      } else if (this.config.nextWaveInterval) {
-        this.waveTimer = Math.max(8, Math.min(35, this.config.nextWaveInterval - Math.min(4, this.config.difficulty - 1)));
+      this.currentWaveIsHuge = isHuge;
+      const isLv1 = this.config.adventureIndex === 1;
+
+      if (totalWaveNum === 1 && !isHuge) {
+        this.waveBudgetRemaining = this.config.difficulty >= 4 ? 75 : 50;
+      } else if (totalWaveNum === 2 && !isHuge) {
+        this.waveBudgetRemaining = isLv1 ? 50 : Math.round(75 * diffMult);
       } else {
-        this.waveTimer = 20 - Math.min(6, this.config.difficulty);
+        const rawBase = isLv1
+          ? totalWaveNum === 3
+            ? 100
+            : 120
+          : Math.round((30 + totalWaveNum * 32 + Math.max(0, totalWaveNum - 5) * 14) * diffMult * roundScale);
+        this.waveBudgetRemaining = Math.round(rawBase * (isHuge ? (isLv1 ? 1.85 : 2.1) : 1));
       }
 
-      // Flag zombie enters first on huge wave
-      if (isHuge && this.config.allowedZombies.includes(1)) {
-        void this.spawnZombieAt(1);
+      if (isFinal) {
+        this.waveTimer = 32;
+      } else if (this.config.nextWaveInterval) {
+        this.waveTimer = Math.max(
+          12,
+          Math.min(35, this.config.nextWaveInterval - Math.max(0, this.config.difficulty - 2) * 1.5),
+        );
       } else {
-        void this.spawnZombieAt(this.pickZombieForWave());
+        this.waveTimer = Math.max(16, 25 - Math.max(0, this.config.difficulty - 2) * 2);
+      }
+
+      this.waveSpawnCooldown = 0;
+      if (isHuge && this.config.allowedZombies.includes(1)) {
+        this.waveBudgetRemaining = Math.max(0, this.waveBudgetRemaining - 50);
+        this.waveSpawnCooldown = 0.7;
+        void this.spawnZombieAt(1);
       }
 
       // Remaining tombstones summon ambush zombies on huge waves
@@ -2340,15 +2388,42 @@ export class BoardEngine {
     }
   }
 
-  private pickZombieForWave(): number {
+  private pickZombieForWave(budgetLeft?: number): number {
     const pool = this.config.allowedZombies.length > 0 ? this.config.allowedZombies : [0, 2, 4];
+    const totalWaveNum = (this.endlessRound - 1) * Math.max(1, this.config.maxWaves) + this.currentWave;
     const progress = this.currentWave / Math.max(1, this.config.maxWaves);
-    const eligible = pool.filter((id) => {
-      const tier = assets.getZombie(id)?.tier ?? 1;
-      return tier <= Math.max(2, Math.ceil(progress * 10));
-    });
-    const list = eligible.length > 0 ? eligible : pool;
-    return list[Math.floor(Math.random() * list.length)];
+    const maxTier =
+      totalWaveNum <= 1
+        ? 1
+        : totalWaveNum === 2
+          ? 2
+          : Math.min(10, Math.max(2, Math.ceil(progress * 10) + (this.config.difficulty >= 4 ? 1 : 0)));
+
+    let eligible = pool.filter((id) => (assets.getZombie(id)?.tier ?? 1) <= maxTier);
+    if (eligible.length === 0) {
+      const minTier = Math.min(...pool.map((id) => assets.getZombie(id)?.tier ?? 1));
+      eligible = pool.filter((id) => (assets.getZombie(id)?.tier ?? 1) === minTier);
+    }
+
+    if (budgetLeft !== undefined) {
+      const affordable = eligible.filter((id) => Math.max(50, assets.getZombie(id)?.val ?? 50) <= budgetLeft);
+      if (affordable.length > 0) {
+        eligible = affordable;
+      } else {
+        let cheapestId = eligible[0];
+        let cheapestCost = Infinity;
+        for (const id of eligible) {
+          const c = Math.max(50, assets.getZombie(id)?.val ?? 50);
+          if (c < cheapestCost) {
+            cheapestCost = c;
+            cheapestId = id;
+          }
+        }
+        return cheapestId;
+      }
+    }
+
+    return eligible[Math.floor(Math.random() * eligible.length)];
   }
 
   private emitFadingBeam(x1: number, y1: number, x2: number, y2: number, color: number, width = 7): void {

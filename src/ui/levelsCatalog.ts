@@ -92,7 +92,7 @@ function makeSceneConfig(
     scene,
     initialSun: 150,
     maxWaves: 10,
-    firstWaveDelay: 12,
+    firstWaveDelay: 18,
     allowedZombies: [0, 2, 4, 7],
     prePlants: [],
     gloveCooldown: 10,
@@ -263,7 +263,7 @@ export function getStarryAdventureChapters(difficulty: number): StarryChapterSpe
         {
           initialSun: d.ch >= 5 ? 250 : 150,
           maxWaves: Math.min(18, waves),
-          firstWaveDelay: d.ch === 1 && sIdx === 0 ? 10 : 12,
+          firstWaveDelay: 18,
           allowedZombies: zList,
           starMainKey: `star-main-${d.ch}-${sIdx + 1}`,
         },
@@ -281,7 +281,7 @@ export function getStarryAdventureChapters(difficulty: number): StarryChapterSpe
         {
           initialSun: sub.sun,
           maxWaves: sub.waves,
-          firstWaveDelay: 12,
+          firstWaveDelay: 16,
           allowedZombies: sub.zombies,
           presetCards: sub.preset,
           zombieHpMult: sub.hp ?? 1,
@@ -617,7 +617,7 @@ export function getClassicAdventureLevels(difficulty: number): BoardConfig[] {
           {
             initialSun: advNum === 1 ? 150 : tIdx >= 4 ? 250 : 150,
             maxWaves: waves,
-            firstWaveDelay: advNum === 1 ? 10 : 12,
+            firstWaveDelay: 18,
             allowedZombies: zList,
             adventureIndex: advNum,
           },
