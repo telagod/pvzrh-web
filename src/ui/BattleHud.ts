@@ -50,16 +50,22 @@ export class BattleHud {
   private shovelBtn!: HTMLButtonElement;
   private gloveBtn!: HTMLButtonElement;
   private gloveImgEl!: HTMLImageElement;
+  private gloveHeldEl!: HTMLImageElement;
   private gloveLabelEl!: HTMLElement;
   private gloveSwitchBtn!: HTMLButtonElement;
-  private extraToolsWrap!: HTMLElement;
   private timeStopBtn!: HTMLButtonElement;
   private hammerBtn!: HTMLButtonElement;
   private hammerCdEl!: HTMLElement;
   private wheelbarrowBtn!: HTMLButtonElement;
+  private wheelbarrowHeldEl!: HTMLImageElement;
   private wheelbarrowCdEl!: HTMLElement;
+  private wheelbarrowLblEl!: HTMLElement;
   private fertilizerBtn!: HTMLButtonElement;
-  private fertilizerCdEl!: HTMLElement;
+  private fertilizerCountEl!: HTMLElement;
+  private fertilizerTimerEl!: HTMLElement;
+  private toolHintEl!: HTMLElement;
+  private toolHintTextEl!: HTMLElement;
+  private toolHintCancelBtn!: HTMLButtonElement;
   private bossBarEl!: HTMLElement;
   private bossPortEl!: HTMLImageElement;
   private bossNameEl!: HTMLElement;
@@ -112,27 +118,65 @@ export class BattleHud {
           </div>
 
           <div class="bh-tools" id="bh-tools" style="${isIz ? 'display:none' : ''}">
-            <button class="bh-tool-bank" id="bh-shovel" title="铲子 (Q)">
-              <img class="bank-bg" src="assets/ui/shovel_bank.webp" alt="" />
-              <img class="tool-ico" src="assets/ui/shovel.webp" alt="铲子" />
-            </button>
-            <button class="bh-tool-bank" id="bh-glove" title="融合手套 (E) / 切换植僵 (V)">
-              <img class="bank-bg" src="assets/ui/shovel_bank.webp" alt="" />
-              <img class="tool-ico" id="bh-glove-img" src="assets/ui/glove.webp" alt="手套" />
-              <span class="bh-tool-cd" id="bh-glove-cd"></span>
-            </button>
-            <button class="bh-glove-mode-btn" id="bh-glove-switch" title="切换植物/僵尸手套 (V)">植</button>
+            <div class="bh-tool-unit">
+              <button class="bh-tool-bank" id="bh-shovel" title="铲子 (Q)：铲除场上植物，无冷却">
+                <img class="bank-bg" src="assets/ui/shovel_bank.webp" alt="" />
+                <img class="tool-ico" src="assets/ui/shovel.webp" alt="铲子" />
+              </button>
+              <span class="bh-tool-cap">铲子</span>
+            </div>
+
+            <div class="bh-tool-unit">
+              <button class="bh-tool-bank" id="bh-glove" title="融合手套 (E)：移动植物或僵尸；点击下方可切换 (V)">
+                <img class="bank-bg" src="assets/ui/shovel_bank.webp" alt="" />
+                <img class="tool-ico" id="bh-glove-img" src="assets/ui/glove.webp" alt="手套" />
+                <img class="bh-tool-held-port" id="bh-glove-held" src="" alt="" style="display:none" />
+                <span class="bh-tool-cd" id="bh-glove-cd"></span>
+              </button>
+              <button class="bh-tool-cap is-switch" id="bh-glove-switch" title="点击切换植物手套 / 僵尸手套 (快捷键 V)">植手⇄</button>
+            </div>
+
+            <div class="bh-tool-unit">
+              <button class="bh-tool-bank" id="bh-hammer" title="大锤 (H)：60秒冷却，对小范围僵尸造成百万重击（首领 5000）">
+                <img class="bank-bg" src="assets/ui/shovel_bank.webp" alt="" />
+                <img class="tool-ico" src="assets/ui/modes/hammer.webp" alt="大锤" />
+                <span class="bh-tool-cd" id="bh-hammer-cd"></span>
+              </button>
+              <span class="bh-tool-cap" id="bh-hammer-lbl">大锤</span>
+            </div>
+
+            <div class="bh-tool-unit">
+              <button class="bh-tool-bank" id="bh-wheelbarrow" title="手推车 (B)：暂存 1 株植物（不触发生成/亡语），再次放下可重置冷却（30秒）">
+                <img class="bank-bg" src="assets/ui/shovel_bank.webp" alt="" />
+                <img class="tool-ico" src="assets/ui/modes/wheelbarrow.webp" alt="手推车" />
+                <img class="bh-tool-held-port" id="bh-wb-held" src="" alt="" style="display:none" />
+                <span class="bh-tool-cd" id="bh-wheelbarrow-cd"></span>
+              </button>
+              <span class="bh-tool-cap" id="bh-wheelbarrow-lbl">手推车</span>
+            </div>
+
+            <div class="bh-tool-unit">
+              <button class="bh-tool-bank" id="bh-fertilizer" title="肥料 (F)：每70秒自动+1袋（上限5），恢复本格满血、解冻并立即结束蓄力/消化冷却">
+                <img class="bank-bg" src="assets/ui/shovel_bank.webp" alt="" />
+                <img class="tool-ico" src="assets/ui/modes/fertilizer_lv2.webp" alt="肥料" />
+                <span class="bh-tool-recharge" id="bh-fert-timer">70s</span>
+                <span class="bh-tool-count" id="bh-fert-count">×1</span>
+              </button>
+              <span class="bh-tool-cap">肥料</span>
+            </div>
           </div>
 
           <div class="bh-ctrls">
-            ${isSandbox ? '<button class="bh-stone-pill gold" id="bh-spawn-wave">刷波测试</button>' : ''}
+            <button class="bh-stone-pill" id="bh-timestop" title="时停 (T)：切换 0.2 倍慢速，便于精细融合操作">时停</button>
+            <button class="bh-stone-pill" id="bh-speed" title="切换倍速 (1x / 2x / 3x)">1x</button>
+            <button class="bh-stone-pill" id="bh-auto" title="自动收集阳光">自动收</button>
+            <button class="bh-stone-pill${audio.isMuted() ? ' muted' : ''}" id="bh-mute" title="开关声音">${audio.isMuted() ? '静音' : '声音'}</button>
+            ${isSandbox ? '<button class="bh-stone-pill gold" id="bh-spawn-wave" title="立即生成一波测试僵尸">刷波</button>' : ''}
             ${buffLabels.length > 0 ? `<button class="bh-stone-pill gold bh-buff-pill" id="bh-buffs-btn" title="查看当前生效的词条加成与敌方词缀">词条(${buffLabels.length})</button>` : ''}
-            ${hasTips ? '<button class="bh-stone-pill gold" id="bh-tips-btn" title="查看本关机制与提示">本关提示</button>' : ''}
-            <button class="bh-stone-pill" id="bh-speed" title="倍速">1x</button>
-            <button class="bh-stone-pill" id="bh-auto" title="自动收阳光">自动收</button>
-            <button class="bh-stone-pill" id="bh-almanac" title="图鉴">图鉴</button>
-            <button class="bh-stone-pill" id="bh-mute" title="静音">🔊</button>
-            <button class="bh-stone-pill" id="bh-pause" title="暂停 (Space)">菜单</button>
+            ${hasTips ? '<button class="bh-stone-pill gold" id="bh-tips-btn" title="查看本关机制与提示">提示</button>' : ''}
+            <button class="bh-stone-pill" id="bh-almanac" title="查看植物与僵尸图鉴">图鉴</button>
+            <button class="bh-stone-pill" id="bh-tools-help" title="查看工具栏与快捷键说明">说明</button>
+            <button class="bh-stone-pill" id="bh-pause" title="暂停与选项 (Space)">菜单</button>
           </div>
         </div>
 
@@ -154,29 +198,15 @@ export class BattleHud {
         <div class="bh-toasts" id="bh-toasts"></div>
         <div id="bh-maliang-host"></div>
 
-        <div class="bh-extra-tools" id="bh-extra-tools" style="${isIz ? 'display:none' : ''}">
-          <button class="bh-mini-tool" id="bh-timestop" title="时停 (T)：全局减缓至 0.2 倍速">
-            <span class="mt-emoji">⏱</span>
-            <span class="mt-lbl">时停[T]</span>
-          </button>
-          <button class="bh-mini-tool" id="bh-hammer" title="重锤 (H)：60s冷却，范围百万重击">
-            <img src="assets/ui/modes/hammer.webp" alt="锤子" />
-            <span class="mt-lbl" id="bh-hammer-cd">重锤[H]</span>
-          </button>
-          <button class="bh-mini-tool" id="bh-wheelbarrow" title="手推车 (B)：30s冷却，暂存移动植物">
-            <img src="assets/ui/modes/wheelbarrow.webp" alt="推车" />
-            <span class="mt-lbl" id="bh-wheelbarrow-cd">推车[B]</span>
-          </button>
-          <button class="bh-mini-tool" id="bh-fertilizer" title="肥料 (F)：每70s自动+1瓶，满血+加速">
-            <img src="assets/ui/modes/fertilizer_lv2.webp" alt="肥料" />
-            <span class="mt-lbl" id="bh-fertilizer-cd">肥×1[F]</span>
-          </button>
+        <div class="bh-tool-hint" id="bh-tool-hint" style="display:none">
+          <span id="bh-tool-hint-text"></span>
+          <button class="bh-tool-hint-cancel" id="bh-tool-hint-cancel">取消</button>
         </div>
 
         <div class="bh-bottom-bar">
           <div class="bh-mode-badge" id="bh-mode-badge" style="display:none"></div>
           <div class="bh-level-name">${escHtml(this.deps.config.title)}</div>
-          <div class="bh-stats" id="bh-stats">杀 0 · 融 0</div>
+          <div class="bh-stats" id="bh-stats">击杀 0 · 融合 0</div>
           <div class="bh-flagmeter">
             <img class="fm-bg" src="assets/ui/flagmeter_empty.webp" alt="" />
             <div class="fm-fill-wrap" id="bh-wave-fill">
@@ -202,16 +232,22 @@ export class BattleHud {
     this.shovelBtn = this.host.querySelector('#bh-shovel')!;
     this.gloveBtn = this.host.querySelector('#bh-glove')!;
     this.gloveImgEl = this.host.querySelector('#bh-glove-img')!;
+    this.gloveHeldEl = this.host.querySelector('#bh-glove-held')!;
     this.gloveLabelEl = this.host.querySelector('#bh-glove-cd')!;
     this.gloveSwitchBtn = this.host.querySelector('#bh-glove-switch')!;
-    this.extraToolsWrap = this.host.querySelector('#bh-extra-tools')!;
     this.timeStopBtn = this.host.querySelector('#bh-timestop')!;
     this.hammerBtn = this.host.querySelector('#bh-hammer')!;
     this.hammerCdEl = this.host.querySelector('#bh-hammer-cd')!;
     this.wheelbarrowBtn = this.host.querySelector('#bh-wheelbarrow')!;
+    this.wheelbarrowHeldEl = this.host.querySelector('#bh-wb-held')!;
     this.wheelbarrowCdEl = this.host.querySelector('#bh-wheelbarrow-cd')!;
+    this.wheelbarrowLblEl = this.host.querySelector('#bh-wheelbarrow-lbl')!;
     this.fertilizerBtn = this.host.querySelector('#bh-fertilizer')!;
-    this.fertilizerCdEl = this.host.querySelector('#bh-fertilizer-cd')!;
+    this.fertilizerCountEl = this.host.querySelector('#bh-fert-count')!;
+    this.fertilizerTimerEl = this.host.querySelector('#bh-fert-timer')!;
+    this.toolHintEl = this.host.querySelector('#bh-tool-hint')!;
+    this.toolHintTextEl = this.host.querySelector('#bh-tool-hint-text')!;
+    this.toolHintCancelBtn = this.host.querySelector('#bh-tool-hint-cancel')!;
     this.bossBarEl = this.host.querySelector('#bh-boss-bar')!;
     this.bossPortEl = this.host.querySelector('#bh-boss-port')!;
     this.bossNameEl = this.host.querySelector('#bh-boss-name')!;
@@ -237,6 +273,20 @@ export class BattleHud {
     this.hammerBtn.addEventListener('click', () => this.deps.board.toggleHammer());
     this.wheelbarrowBtn.addEventListener('click', () => this.deps.board.toggleWheelbarrow());
     this.fertilizerBtn.addEventListener('click', () => this.deps.board.toggleFertilizer());
+    this.toolHintCancelBtn.addEventListener('click', () => {
+      const snap = this.deps.board.getSnapshot();
+      const anyBoardTool =
+        snap.shovelActive ||
+        snap.gloveActive ||
+        snap.hammerActive ||
+        snap.wheelbarrowActive ||
+        snap.fertilizerActive;
+      if (!anyBoardTool && snap.timeStopActive) {
+        this.deps.board.toggleTimeStop();
+      } else {
+        this.deps.board.cancelSelection();
+      }
+    });
     this.speedBtn.addEventListener('click', () => this.deps.board.toggleSpeed());
     this.autoBtn.addEventListener('click', () => this.deps.board.toggleAutoCollect());
     if (this.deps.config.maliangMode) {
@@ -248,9 +298,14 @@ export class BattleHud {
     this.muteBtn.addEventListener('click', () => {
       const next = !audio.isMuted();
       audio.applySettings(0.55, 0.85, next);
-      this.muteBtn.textContent = next ? '🔇' : '🔊';
+      this.muteBtn.textContent = next ? '静音' : '声音';
+      this.muteBtn.classList.toggle('muted', next);
     });
     this.host.querySelector('#bh-almanac')?.addEventListener('click', () => this.deps.onOpenAlmanac());
+    this.host.querySelector('#bh-tools-help')?.addEventListener('click', () => {
+      this.deps.board.setPaused(true);
+      this.showToolsHelpModal();
+    });
     this.host.querySelector('#bh-spawn-wave')?.addEventListener('click', () => this.deps.board.spawnSandboxWave());
     this.host.querySelector('#bh-buffs-btn')?.addEventListener('click', () => {
       this.deps.board.setPaused(true);
@@ -314,7 +369,6 @@ export class BattleHud {
     this.seedBankWrap.style.display = snap.conveyorMode ? 'none' : 'flex';
     this.conveyorWrap.style.display = snap.conveyorMode ? 'block' : 'none';
     this.toolsWrap.style.display = snap.izMode ? 'none' : 'flex';
-    this.extraToolsWrap.style.display = snap.izMode ? 'none' : 'flex';
     this.sunSlotEl.style.display = snap.conveyorMode ? 'none' : 'flex';
     this.sunEl.textContent = snap.infiniteSun ? '∞' : String(snap.sun);
 
@@ -350,40 +404,115 @@ export class BattleHud {
 
     this.shovelBtn.classList.toggle('active', snap.shovelActive);
     this.gloveBtn.classList.toggle('active', snap.gloveActive);
+    const hasGloveHeld = snap.gloveHoldingPlantId !== null || snap.gloveHoldingZombieId !== null;
+    this.gloveBtn.classList.toggle('cooling', snap.gloveCooldownLeft > 0.1 && !hasGloveHeld);
+    this.gloveBtn.classList.toggle('has-stored', hasGloveHeld);
     const targetGloveSrc = snap.gloveMode === 'zombie' ? 'assets/ui/modes/zombie_glove.webp' : 'assets/ui/glove.webp';
     if (!this.gloveImgEl.src.endsWith(targetGloveSrc)) {
       this.gloveImgEl.src = targetGloveSrc;
     }
-    this.gloveSwitchBtn.textContent = snap.gloveMode === 'zombie' ? '僵' : '植';
+    if (snap.gloveHoldingPlantId !== null) {
+      const p = assets.getPlant(snap.gloveHoldingPlantId);
+      const src = `assets/portraits/plants/${p?.portrait ?? `p_${snap.gloveHoldingPlantId}.webp`}`;
+      if (!this.gloveHeldEl.src.endsWith(src)) this.gloveHeldEl.src = src;
+      this.gloveHeldEl.style.display = 'block';
+    } else if (snap.gloveHoldingZombieId !== null) {
+      const z = assets.getZombie(snap.gloveHoldingZombieId);
+      const src = `assets/portraits/zombies/${z?.portrait ?? `z_${snap.gloveHoldingZombieId}.webp`}`;
+      if (!this.gloveHeldEl.src.endsWith(src)) this.gloveHeldEl.src = src;
+      this.gloveHeldEl.style.display = 'block';
+    } else {
+      this.gloveHeldEl.style.display = 'none';
+    }
+    this.gloveSwitchBtn.textContent = snap.gloveMode === 'zombie' ? '僵手⇄' : '植手⇄';
     this.gloveSwitchBtn.classList.toggle('zombie-mode', snap.gloveMode === 'zombie');
     this.gloveLabelEl.textContent =
-      snap.gloveHoldingName || snap.gloveHoldingZombieName
-        ? '持有'
-        : snap.gloveCooldownLeft > 0.1
-          ? `${Math.ceil(snap.gloveCooldownLeft)}s`
-          : '';
+      hasGloveHeld ? '' : snap.gloveCooldownLeft > 0.1 ? `${Math.ceil(snap.gloveCooldownLeft)}s` : '';
 
     this.timeStopBtn.classList.toggle('active', snap.timeStopActive);
+    this.timeStopBtn.classList.toggle('timestop-on', snap.timeStopActive);
+    this.timeStopBtn.textContent = snap.timeStopActive ? '时停中' : '时停';
+
     this.hammerBtn.classList.toggle('active', snap.hammerActive);
     this.hammerBtn.classList.toggle('cooling', snap.hammerCooldownLeft > 0.1);
     this.hammerCdEl.textContent =
-      snap.hammerCooldownLeft > 0.1 ? `${Math.ceil(snap.hammerCooldownLeft)}s` : '重锤[H]';
+      snap.hammerCooldownLeft > 0.1 ? `${Math.ceil(snap.hammerCooldownLeft)}s` : '';
 
     this.wheelbarrowBtn.classList.toggle('active', snap.wheelbarrowActive);
-    this.wheelbarrowBtn.classList.toggle('cooling', snap.wheelbarrowCooldownLeft > 0.1 && snap.wheelbarrowStoredPlantId === null);
-    this.wheelbarrowCdEl.textContent =
-      snap.wheelbarrowStoredPlantId !== null
-        ? '持有'
-        : snap.wheelbarrowCooldownLeft > 0.1
-          ? `${Math.ceil(snap.wheelbarrowCooldownLeft)}s`
-          : '推车[B]';
+    this.wheelbarrowBtn.classList.toggle(
+      'cooling',
+      snap.wheelbarrowCooldownLeft > 0.1 && snap.wheelbarrowStoredPlantId === null,
+    );
+    this.wheelbarrowBtn.classList.toggle('has-stored', snap.wheelbarrowStoredPlantId !== null);
+    if (snap.wheelbarrowStoredPlantId !== null) {
+      const p = assets.getPlant(snap.wheelbarrowStoredPlantId);
+      const src = `assets/portraits/plants/${p?.portrait ?? `p_${snap.wheelbarrowStoredPlantId}.webp`}`;
+      if (!this.wheelbarrowHeldEl.src.endsWith(src)) this.wheelbarrowHeldEl.src = src;
+      this.wheelbarrowHeldEl.style.display = 'block';
+      this.wheelbarrowCdEl.textContent = '';
+      this.wheelbarrowLblEl.textContent = '待放';
+      this.wheelbarrowLblEl.classList.add('stored');
+    } else {
+      this.wheelbarrowHeldEl.style.display = 'none';
+      this.wheelbarrowCdEl.textContent =
+        snap.wheelbarrowCooldownLeft > 0.1 ? `${Math.ceil(snap.wheelbarrowCooldownLeft)}s` : '';
+      this.wheelbarrowLblEl.textContent = '手推车';
+      this.wheelbarrowLblEl.classList.remove('stored');
+    }
 
     this.fertilizerBtn.classList.toggle('active', snap.fertilizerActive);
     this.fertilizerBtn.classList.toggle('cooling', snap.fertilizerCharges <= 0);
-    this.fertilizerCdEl.textContent =
-      snap.fertilizerCharges >= 5
-        ? `肥×${snap.fertilizerCharges}`
-        : `肥×${snap.fertilizerCharges} (${snap.fertilizerNextSec}s)`;
+    this.fertilizerCountEl.textContent = `×${snap.fertilizerCharges}`;
+    if (snap.fertilizerCharges >= 5) {
+      this.fertilizerTimerEl.style.display = 'none';
+    } else {
+      this.fertilizerTimerEl.style.display = 'inline-block';
+      this.fertilizerTimerEl.textContent = `${snap.fertilizerNextSec}s`;
+    }
+
+    let hintText = '';
+    let hintBtn = '';
+    if (snap.shovelActive) {
+      hintText = '铲子：点击草坪上的植物将其铲除';
+      hintBtn = '取消';
+    } else if (snap.gloveActive && snap.gloveHoldingName) {
+      hintText = `植物手套已拿起【${snap.gloveHoldingName}】：点击目标格放置或融合`;
+    } else if (snap.gloveActive && snap.gloveHoldingZombieName) {
+      hintText = `僵尸手套已抓住【${snap.gloveHoldingZombieName}】：点击目标格放回`;
+    } else if (snap.gloveActive && snap.gloveMode === 'plant') {
+      hintText = '植物手套：点击植物拿起移动或融合（点「植手⇄」或按 V 切换僵尸手套）';
+      hintBtn = '取消';
+    } else if (snap.gloveActive && snap.gloveMode === 'zombie') {
+      hintText = '僵尸手套：点击场上普通或魅惑僵尸抓取换行（首领免疫）';
+      hintBtn = '取消';
+    } else if (snap.hammerActive) {
+      hintText = '大锤：点击僵尸密集处砸下百万范围伤害（首领 5000）';
+      hintBtn = '取消';
+    } else if (snap.wheelbarrowActive && snap.wheelbarrowStoredPlantName) {
+      hintText = `手推车已暂存【${snap.wheelbarrowStoredPlantName}】：点击目标格放下或融合（重置技能冷却）`;
+      hintBtn = '暂不放';
+    } else if (snap.wheelbarrowActive) {
+      hintText = '手推车：点击 1 株植物暂存车内（不触发亡语，放下时重置冷却）';
+      hintBtn = '取消';
+    } else if (snap.fertilizerActive) {
+      hintText = '肥料：点击有植物的格子恢复满血、解冻并立即结束蓄力/消化冷却';
+      hintBtn = '取消';
+    } else if (snap.timeStopActive) {
+      hintText = '时停已开启（全局 0.2 倍慢速，便于精细融合操作）';
+      hintBtn = '关闭时停';
+    }
+    if (hintText) {
+      this.toolHintTextEl.textContent = hintText;
+      this.toolHintEl.style.display = 'flex';
+      if (hintBtn) {
+        this.toolHintCancelBtn.textContent = hintBtn;
+        this.toolHintCancelBtn.style.display = 'inline-flex';
+      } else {
+        this.toolHintCancelBtn.style.display = 'none';
+      }
+    } else {
+      this.toolHintEl.style.display = 'none';
+    }
 
     if (this.maLiangPad) {
       this.maLiangPad.updateInk(snap.maliangInk);
@@ -421,7 +550,9 @@ export class BattleHud {
     this.speedBtn.textContent = `${snap.speed}x`;
     this.speedBtn.classList.toggle('active', snap.speed > 1);
     this.autoBtn.classList.toggle('active', snap.autoCollect);
-    this.muteBtn.textContent = audio.isMuted() ? '🔇' : '🔊';
+    const muted = audio.isMuted();
+    this.muteBtn.textContent = muted ? '静音' : '声音';
+    this.muteBtn.classList.toggle('muted', muted);
 
     const pct = Math.round(snap.waveProgress * 100);
     this.waveFillEl.style.width = `${pct}%`;
@@ -432,15 +563,15 @@ export class BattleHud {
       this.statsEl.textContent = `太阳 ${snap.sun} · 已吃 ${snap.izBrainsTotal - snap.izBrainsLeft}/${snap.izBrainsTotal}`;
     } else if (snap.vaseMode) {
       this.waveTextEl.textContent = `🏺 剩余罐子 ${snap.vasesLeft}/${snap.vasesTotal}`;
-      this.statsEl.textContent = `已砸 ${snap.vasesTotal - snap.vasesLeft}/${snap.vasesTotal} · 杀 ${snap.kills}`;
+      this.statsEl.textContent = `已砸 ${snap.vasesTotal - snap.vasesLeft}/${snap.vasesTotal} · 击杀 ${snap.kills}`;
     } else {
       this.waveTextEl.textContent =
         this.deps.config.mode === 'sandbox'
-          ? `沙盒 · 杀 ${snap.kills}`
+          ? `沙盒 · 击杀 ${snap.kills}`
           : snap.endlessRound > 0
             ? `第 ${snap.endlessRound} 轮 · 波次 ${snap.wave}/${snap.maxWaves}`
             : `波次 ${snap.wave}/${snap.maxWaves}`;
-      this.statsEl.textContent = `杀 ${snap.kills} · 融 ${snap.fusions}`;
+      this.statsEl.textContent = `击杀 ${snap.kills} · 融合 ${snap.fusions}`;
     }
 
     if (snap.finalWaveVisible) {
@@ -573,6 +704,37 @@ export class BattleHud {
     `;
     bindHoverImages(this.modalHost);
     this.modalHost.querySelector('#bm-resume')?.addEventListener('click', () => {
+      this.modalHost.innerHTML = '';
+      this.deps.board.setPaused(false);
+    });
+  }
+
+  private showToolsHelpModal(): void {
+    this.modalHost.innerHTML = `
+      <div class="pvz-modal-backdrop">
+        <div class="pvz-tomb-dialog">
+          <img class="pvz-tomb-bg" src="assets/ui/options_menuback.webp" alt="" />
+          <div class="pvz-tomb-inner">
+            <div class="pvz-tomb-hdr">战斗工具与快捷键说明</div>
+            <div class="help-text">
+              <p><strong>铲子 (Q)</strong>：铲除场上植物，无冷却。</p>
+              <p><strong>植物 / 僵尸手套 (E · 点「植手⇄」或 V 切换)</strong>：移动植物（密植/载体/飞行类仅 1/3 冷却）或抓取普通/魅惑僵尸换行（首领免疫，冷却 30s / 魅惑 15s）。</p>
+              <p><strong>大锤 (H)</strong>：60 秒冷却，对小范围僵尸造成百万重击（首领 5000）。</p>
+              <p><strong>手推车 (B)</strong>：暂存 1 株植物进车内且不触发生成/亡语；再次放下时保留血量并重置技能/属性冷却，随后进入 30 秒冷却（不能收纳机械坚果）。</p>
+              <p><strong>肥料 (F)</strong>：每 70 秒自动补充 1 袋（上限 5），恢复本格满血、解冻并立即结束地雷/吞咽/磁石等蓄力冷却。</p>
+              <p><strong>时停 (T)</strong>：切换全局 0.2 倍慢速，方便精准操作与极限融合。</p>
+              <p><strong>其它快捷</strong>：<code>1-9/0</code> 选卡 · <code>Space</code> 暂停 · <code>右键</code> 取消选中。</p>
+            </div>
+            <button class="pvz-tomb-done-btn" id="thm-resume">
+              <img src="assets/ui/options_backtogame.webp" data-base="assets/ui/options_backtogame.webp" data-hl="assets/ui/options_backtogame_hl.webp" alt="返回游戏" />
+              <span>返回游戏</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    bindHoverImages(this.modalHost);
+    this.modalHost.querySelector('#thm-resume')?.addEventListener('click', () => {
       this.modalHost.innerHTML = '';
       this.deps.board.setPaused(false);
     });

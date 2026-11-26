@@ -459,12 +459,15 @@ export interface HudSnapshot {
   gloveMode: 'plant' | 'zombie';
   gloveCooldownLeft: number;
   gloveHoldingName: string | null;
+  gloveHoldingPlantId: number | null;
   gloveHoldingZombieName: string | null;
+  gloveHoldingZombieId: number | null;
   hammerActive: boolean;
   hammerCooldownLeft: number;
   wheelbarrowActive: boolean;
   wheelbarrowCooldownLeft: number;
   wheelbarrowStoredPlantId: number | null;
+  wheelbarrowStoredPlantName: string | null;
   fertilizerActive: boolean;
   fertilizerCharges: number;
   fertilizerNextSec: number;

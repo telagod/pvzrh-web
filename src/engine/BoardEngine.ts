@@ -1197,6 +1197,11 @@ export class BoardEngine {
     this.emitHud();
   }
 
+  /** Cancels the active HUD card/tool selection (for touchscreens & HUD cancel button). */
+  cancelSelection(): void {
+    this.cancelActiveTool();
+  }
+
   toggleSpeed(): void {
     this.speed = this.speed === 1 ? 2 : this.speed === 2 ? 3 : 1;
     audio.playSfx('Tap', 0.7, 40);
@@ -1526,6 +1531,7 @@ export class BoardEngine {
         pl.frost = 0;
         pl.frozenTimer = 0;
         pl.chewTimer = 0;
+        pl.specialTimer = 0;
         if (pl.beh.kind === 'mine') {
           pl.armTimer = 0;
           pl.armed = true;
@@ -1544,12 +1550,8 @@ export class BoardEngine {
 
     if (this.wheelbarrowActive) {
       if (!this.wheelbarrowStored) {
-        const cand =
-          slot.pumpkin ??
-          slot.fly ??
-          (slot.mains.length > 0 ? slot.mains[slot.mains.length - 1] : null) ??
-          slot.base;
-        if (!cand || cand.plantId === 310) {
+        const cand = this.getTopPlantCandidate(slot);
+        if (!cand || cand.plantId === 1151 || cand.plantId === 310) {
           audio.playSfx('Buzzer', 0.65, 180);
           return;
         }
@@ -1562,7 +1564,8 @@ export class BoardEngine {
       }
       const res = await this.tryPlantOrFuse(this.wheelbarrowStored.plantId, row, col, {
         free: true,
-        preserveHpRatio: this.wheelbarrowStored.hp / Math.max(1, this.wheelbarrowStored.maxHp),
+        preserveExactHp: this.wheelbarrowStored.hp,
+        suppressSpawnEffect: true,
       });
       if (res) {
         this.wheelbarrowStored = null;
@@ -1606,14 +1609,27 @@ export class BoardEngine {
         }
         return;
       }
-      const res = await this.tryPlantOrFuse(this.gloveHeldPlant.plantId, row, col, {
+      const movedId = this.gloveHeldPlant.plantId;
+      const res = await this.tryPlantOrFuse(movedId, row, col, {
         free: true,
         preserveHpRatio: this.gloveHeldPlant.hp / Math.max(1, this.gloveHeldPlant.maxHp),
       });
       if (res) {
+        const movedDef = assets.getPlant(movedId);
+        const movedBeh = getPlantBehavior(movedId);
+        const isFastGlove =
+          movedDef?.layer === 'Lily' ||
+          movedDef?.layer === 'Pot' ||
+          movedDef?.layer === 'Fly' ||
+          movedBeh.stackable3;
+        const baseCd = this.config.gloveCooldown;
+        this.gloveCooldownLeft = this.config.zeroCooldown
+          ? 0
+          : isFastGlove
+            ? Math.round((baseCd / 3) * 10) / 10
+            : baseCd;
         this.gloveHeldPlant = null;
         this.gloveActive = false;
-        this.gloveCooldownLeft = this.config.zeroCooldown ? 0 : this.config.gloveCooldown;
         this.emitHud();
       } else {
         audio.playSfx('Buzzer', 0.6, 200);
@@ -1781,7 +1797,12 @@ export class BoardEngine {
     plantId: number,
     row: number,
     col: number,
-    opts?: { free?: boolean; preserveHpRatio?: number },
+    opts?: {
+      free?: boolean;
+      preserveHpRatio?: number;
+      preserveExactHp?: number;
+      suppressSpawnEffect?: boolean;
+    },
   ): Promise<boolean> {
     const slot = this.tileGrid[row]?.[col];
     if (!slot) return false;
@@ -1809,8 +1830,16 @@ export class BoardEngine {
       return true;
     }
 
-    const placed = await this.placePlant(plantId, row, col, false, action.slotType);
-    if (placed && opts?.preserveHpRatio !== undefined) {
+    const placed = await this.placePlant(
+      plantId,
+      row,
+      col,
+      Boolean(opts?.suppressSpawnEffect),
+      action.slotType,
+    );
+    if (placed && opts?.preserveExactHp !== undefined) {
+      placed.hp = Math.max(10, Math.min(placed.maxHp, Math.round(opts.preserveExactHp)));
+    } else if (placed && opts?.preserveHpRatio !== undefined) {
       placed.hp = Math.max(10, Math.round(placed.maxHp * opts.preserveHpRatio));
     }
     if (this.config.scene.waterRows.includes(row) && !slot.base) {
@@ -1963,12 +1992,15 @@ export class BoardEngine {
     return target !== null;
   }
 
+  private getTopPlantCandidate(slot: TileSlotState): PlantInstance | null {
+    if (slot.pumpkin) return slot.pumpkin;
+    if (slot.fly) return slot.fly;
+    if (slot.mains.length > 0) return slot.mains[slot.mains.length - 1];
+    return slot.base;
+  }
+
   private pickTopPlantAt(slot: TileSlotState): PlantInstance | null {
-    let target: PlantInstance | null = null;
-    if (slot.pumpkin) target = slot.pumpkin;
-    else if (slot.fly) target = slot.fly;
-    else if (slot.mains.length > 0) target = slot.mains[slot.mains.length - 1];
-    else if (slot.base) target = slot.base;
+    const target = this.getTopPlantCandidate(slot);
     if (!target) return null;
     this.destroyPlantInstance(target, slot);
     return target;
@@ -3804,17 +3836,26 @@ export class BoardEngine {
       g.circle(cx, y0 + this.cellH / 2, this.cellW * 1.15)
         .fill({ color: 0xf97316, alpha: 0.14 * pulse })
         .stroke({ width: 2.5, color: 0xfb923c, alpha: 0.9 });
-      this.fusionPreviewLabel.text = '🔨 点击重锤范围';
+      this.fusionPreviewLabel.text = '点击重锤范围';
       this.fusionPreviewLabel.position.set(cx, y0 - 4);
       this.fusionPreviewLabel.visible = true;
       return;
     }
 
-    if (this.wheelbarrowActive) {
+    if (this.wheelbarrowActive && !this.wheelbarrowStored) {
+      const slot = this.tileGrid[row]?.[col];
+      const cand = slot ? this.getTopPlantCandidate(slot) : null;
+      const blocked = Boolean(cand && (cand.plantId === 1151 || cand.plantId === 310));
+      const color = blocked ? 0xef4444 : 0x10b981;
+      const strokeColor = blocked ? 0xf87171 : 0x34d399;
       g.rect(x0 + 2, y0 + 2, this.cellW - 4, this.cellH - 4)
-        .fill({ color: 0x10b981, alpha: 0.18 * pulse })
-        .stroke({ width: 2.5, color: 0x34d399, alpha: 0.9 });
-      this.fusionPreviewLabel.text = this.wheelbarrowStored ? '🛒 点击放置植物' : '🛒 点击收纳植物';
+        .fill({ color, alpha: cand ? 0.22 * pulse : 0.08 })
+        .stroke({ width: 2.5, color: strokeColor, alpha: 0.9 });
+      this.fusionPreviewLabel.text = blocked
+        ? '不可收纳机械坚果'
+        : cand
+          ? `收纳：${cand.def.name}`
+          : '点击有植物的格子收纳';
       this.fusionPreviewLabel.position.set(cx, y0 - 4);
       this.fusionPreviewLabel.visible = true;
       return;
@@ -3824,7 +3865,7 @@ export class BoardEngine {
       g.rect(x0 + 2, y0 + 2, this.cellW - 4, this.cellH - 4)
         .fill({ color: 0xa3e635, alpha: 0.22 * pulse })
         .stroke({ width: 2.5, color: 0xd9f99d, alpha: 0.95 });
-      this.fusionPreviewLabel.text = '🧪 点击施肥满血+加速';
+      this.fusionPreviewLabel.text = '点击施肥回血并结束蓄力';
       this.fusionPreviewLabel.position.set(cx, y0 - 4);
       this.fusionPreviewLabel.visible = true;
       return;
@@ -3834,13 +3875,14 @@ export class BoardEngine {
       g.rect(x0 + 2, y0 + 2, this.cellW - 4, this.cellH - 4)
         .fill({ color: 0xa855f7, alpha: 0.18 * pulse })
         .stroke({ width: 2.5, color: 0xd8b4fe, alpha: 0.9 });
-      this.fusionPreviewLabel.text = `🧤 移动僵尸 → 第${row + 1}行`;
+      this.fusionPreviewLabel.text = `移动僵尸 → 第${row + 1}行`;
       this.fusionPreviewLabel.position.set(cx, y0 - 4);
       this.fusionPreviewLabel.visible = true;
       return;
     }
 
     const activeId =
+      (this.wheelbarrowActive ? this.wheelbarrowStored?.plantId ?? null : null) ??
       this.gloveHeldPlant?.plantId ??
       (this.selectedCardIndex >= 0
         ? this.config.conveyorMode
@@ -4048,12 +4090,17 @@ export class BoardEngine {
       gloveHoldingName: this.gloveHeldPlant
         ? assets.getPlant(this.gloveHeldPlant.plantId)?.name ?? null
         : null,
+      gloveHoldingPlantId: this.gloveHeldPlant?.plantId ?? null,
       gloveHoldingZombieName: this.gloveHeldZombie ? this.gloveHeldZombie.def.name : null,
+      gloveHoldingZombieId: this.gloveHeldZombie?.zombieId ?? null,
       hammerActive: this.hammerActive,
       hammerCooldownLeft: this.hammerCooldownLeft,
       wheelbarrowActive: this.wheelbarrowActive,
       wheelbarrowCooldownLeft: this.wheelbarrowCooldownLeft,
       wheelbarrowStoredPlantId: this.wheelbarrowStored?.plantId ?? null,
+      wheelbarrowStoredPlantName: this.wheelbarrowStored
+        ? assets.getPlant(this.wheelbarrowStored.plantId)?.name ?? null
+        : null,
       fertilizerActive: this.fertilizerActive,
       fertilizerCharges: this.fertilizerCharges,
       fertilizerNextSec: this.fertilizerCharges >= 5 ? 0 : Math.ceil(this.fertilizerTimer),
