@@ -613,7 +613,7 @@ export class LevelSelect {
         { label: '经典冒险', sid: 0, pid: 0, iconUrl: 'assets/ui/cat_adventure.webp', group: 'classic', tip: '原版 45 关经典冒险战役 (白天 / 黑夜 / 泳池 / 浓雾 / 屋顶)' },
         { label: '高级挑战', sid: 0, pid: 1005, iconUrl: 'assets/ui/cat_challenge.webp', group: 'unlock', tip: '12 关超级融合植物试炼 (PageUnlockChallenge)' },
         { label: '十旗挑战', sid: 2, pid: 2, iconUrl: 'assets/ui/cat_flags.webp', group: 'flags', tip: '12 关十面旗帜高强度攻防挑战 (PageFlagChallenge)' },
-        { label: '迷你游戏', sid: 1, pid: 13, iconUrl: 'assets/ui/cat_minigames.webp', group: 'minigames', tip: '12 关经典融合版迷你游戏精选' },
+        { label: '迷你游戏', sid: 1, pid: 13, iconUrl: 'assets/ui/cat_minigames.webp', group: 'minigames', tip: '13 关经典融合版迷你游戏精选（含手推车挑战）' },
         { label: '冒险的时光', sid: 18, pid: 36, group: 'snow', tip: '极寒雪原 9 关特别冒险 (PageNewAdvantureLevel)' },
         { label: '星辉冒险\n雪原更新', sid: 18, pid: 35, action: 'go-star', tip: '前往星辉冒险（含第六章雪原）' },
         { label: '超级自定义\n(自由沙盒)', sid: 6, pid: 14, action: 'go-sandbox', tip: '12 种地形自由测试全图鉴融合阵型' },
@@ -710,9 +710,11 @@ export class LevelSelect {
           sceneId: classicMeta?.groundSceneId ?? cfg.scene.id,
           iconUrl: classicMeta
             ? `assets/ui/adv/${classicMeta.icon}.webp`
-            : isVase
-              ? `assets/ui/modes/scary_pot_${idx % 2 === 0 ? 1 : 3}.webp`
-              : this.pickPlantIcon([iconPid], idx + advNum),
+            : cfg.levelKey === 'mg-wheelbarrow'
+              ? 'assets/ui/modes/wheelbarrow.webp'
+              : isVase
+                ? `assets/ui/modes/scary_pot_${idx % 2 === 0 ? 1 : 3}.webp`
+                : this.pickPlantIcon([iconPid], idx + advNum),
           label: cardLabel,
           title: `${cfg.title}${isVase ? '' : ` (${cfg.maxWaves}波)`}${cfg.tips ? ` — ${formatUnityRichText(cfg.tips)}` : ''}`,
           dataAttr: `data-launch-key="${cfg.levelKey}"`,

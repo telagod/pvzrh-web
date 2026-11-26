@@ -1,4 +1,4 @@
-import type { SaveProfile } from '../types/game';
+import type { BattleToolId, SaveProfile } from '../types/game';
 
 export interface PlantUnlockRule {
   hint: string;
@@ -222,3 +222,51 @@ export function getPlantUnlockHint(id: number): string {
     '局内通过对应配方融合发现后解锁（或在自由沙盒直接使用）'
   );
 }
+
+export interface ToolUnlockMeta {
+  id: BattleToolId;
+  name: string;
+  icon: string;
+  hint: string;
+  check: (p: SaveProfile) => boolean;
+}
+
+export const TOOL_UNLOCK_RULES: Record<BattleToolId, ToolUnlockMeta> = {
+  shovel: {
+    id: 'shovel',
+    name: '铲子',
+    icon: 'assets/ui/shovel.webp',
+    hint: '初始解锁',
+    check: () => true,
+  },
+  glove: {
+    id: 'glove',
+    name: '手套（植/僵）',
+    icon: 'assets/ui/glove.webp',
+    hint: '通关冒险第 4 关 (1-4) 解锁',
+    check: (p) => p.unlockAll || p.advLevel >= 5 || hasStar(p, 'star-main-1-4'),
+  },
+  fertilizer: {
+    id: 'fertilizer',
+    name: '肥料',
+    icon: 'assets/ui/modes/fertilizer_lv2.webp',
+    hint: '通关冒险第 13 关 (2-4) 解锁',
+    check: (p) => p.unlockAll || p.advLevel >= 14 || hasStar(p, 'star-main-2-4'),
+  },
+  hammer: {
+    id: 'hammer',
+    name: '大锤',
+    icon: 'assets/ui/modes/hammer.webp',
+    hint: '通关冒险第 31 关 (4-4) 解锁',
+    check: (p) => p.unlockAll || p.advLevel >= 32 || hasStar(p, 'star-main-4-4'),
+  },
+  wheelbarrow: {
+    id: 'wheelbarrow',
+    name: '手推车',
+    icon: 'assets/ui/modes/wheelbarrow.webp',
+    hint: '通关挑战-迷你游戏「手推车挑战」解锁',
+    check: (p) => p.unlockAll || hasChallenge(p, 'mg-wheelbarrow'),
+  },
+};
+
+export const TRACKED_UNLOCK_TOOLS: BattleToolId[] = ['glove', 'fertilizer', 'hammer', 'wheelbarrow'];

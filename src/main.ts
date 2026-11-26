@@ -2,7 +2,7 @@ import './styles.css';
 import { assets } from './assets/AssetLoader';
 import { BoardEngine } from './engine/BoardEngine';
 import { saveManager } from './save/SaveManager';
-import type { BoardConfig, DeckSlot, ScreenId } from './types/game';
+import type { BattleToolId, BoardConfig, DeckSlot, ScreenId } from './types/game';
 import type { Almanac } from './ui/Almanac';
 import { BattleHud } from './ui/BattleHud';
 import type { LevelTab } from './ui/LevelSelect';
@@ -356,8 +356,10 @@ class PvzWebApp {
       },
       onGameEnd: (won, stats) => {
         let newlyUnlocked: number[] = [];
+        let newlyUnlockedTools: BattleToolId[] = [];
         if (won) {
           const beforeUnlock = saveManager.getUnlockedPlantSet();
+          const beforeTools = saveManager.getUnlockedToolIds();
           saveManager.addCoins(120);
           if (config.adventureIndex) saveManager.recordAdventureWin(config.adventureIndex);
           if (config.starMainKey) saveManager.recordStarMainWin(config.starMainKey);
@@ -399,8 +401,10 @@ class PvzWebApp {
           }
           const afterUnlock = saveManager.getUnlockedPlantSet();
           newlyUnlocked = [...afterUnlock].filter((id) => !beforeUnlock.has(id));
+          const afterTools = saveManager.getUnlockedToolIds();
+          newlyUnlockedTools = [...afterTools].filter((id) => !beforeTools.has(id));
         }
-        hud?.showEndModal(won, stats, newlyUnlocked);
+        hud?.showEndModal(won, stats, newlyUnlocked, newlyUnlockedTools);
       },
     });
     this.activeBoard = board;

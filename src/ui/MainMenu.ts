@@ -577,7 +577,7 @@ export class MainMenu {
       '操作与融合指南',
       `
         <p><strong>融合种植</strong>：选中植物卡点击兼容格子即可二合一融合；传送带关卡免阳光直接出卡。</p>
-        <p><strong>战斗工具栏</strong>：顶部工具区提供 <strong>铲子</strong>(<code>Q</code>)、<strong>植物/僵尸手套</strong>(<code>E</code>，<code>V</code>切换)、<strong>大锤</strong>(<code>H</code>)、<strong>手推车</strong>(<code>B</code>，暂存植物且放下重置冷却) 与 <strong>肥料</strong>(<code>F</code>，回满血+结束蓄力)；右上角提供 <strong>时停</strong>(<code>T</code>，0.2倍慢速)。</p>
+        <p><strong>战斗工具逐步解锁</strong>：<strong>铲子</strong>(<code>Q</code>) 与 <strong>时停</strong>(<code>T</code>) 初始可用；<strong>植物/僵尸手套</strong>(<code>E</code>，<code>V</code>切换) 需通关冒险第 4 关(1-4)；<strong>肥料</strong>(<code>F</code>) 需通关冒险第 13 关(2-4)；<strong>大锤</strong>(<code>H</code>) 需通关冒险第 31 关(4-4)；<strong>手推车</strong>(<code>B</code>) 需通关挑战-迷你游戏「手推车挑战」解锁（自由沙盒全可用）。</p>
         <p><strong>我是僵尸（解谜模式）</strong>：共 92 关原版数据，在红线右侧投放僵尸吃光左侧 5 枚大脑即可获胜。</p>
         <p><strong>其它快捷键</strong>：<code>1-9/0</code> 选卡 · <code>Space</code> 暂停 · <code>右键</code> 取消选中。</p>
       `,

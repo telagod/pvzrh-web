@@ -2,7 +2,14 @@ import { assets } from '../assets/AssetLoader';
 import { fusionSystem } from '../engine/FusionSystem';
 import { isNormalCard } from '../save/plantUnlocks';
 import { saveManager } from '../save/SaveManager';
-import type { BoardConfig, ExploreLevelDef, IzLevelEntry, PlantDef, VaseSpec } from '../types/game';
+import type {
+  BoardConfig,
+  ExploreLevelDef,
+  IzLevelEntry,
+  PlantDef,
+  UnlockedToolsState,
+  VaseSpec,
+} from '../types/game';
 import { getTowerDefenseLevels } from './towerCatalog';
 
 export interface StarryChapterSpec {
@@ -841,7 +848,19 @@ export function getChallengeGroups(
     { key: 'flg-87', name: '十旗挑战\n屋顶', sid: 4, pid: 32, zombies: [0, 4, 15, 26, 31, 32, 33, 35, 36] },
   ];
 
-  const miniSpecs: { key: string; name: string; sid: number; pid: number; sun: number; waves: number; zombies: number[]; spd?: number; hp?: number; preset?: number[]; tips: string }[] = [
+  const miniSpecs: { key: string; name: string; sid: number; pid: number; sun: number; waves: number; zombies: number[]; spd?: number; hp?: number; preset?: number[]; wbCd?: number; forceTools?: Partial<UnlockedToolsState>; tips: string }[] = [
+    {
+      key: 'mg-wheelbarrow',
+      name: '手推车挑战',
+      sid: 0,
+      pid: 1,
+      sun: 250,
+      waves: 12,
+      zombies: [0, 2, 3, 4, 8, 9],
+      wbCd: 3,
+      forceTools: { wheelbarrow: true },
+      tips: '关卡特性：手推车冷却降低至 3 秒！\n手推车可以用来暂存和移动植物，放下时保留血量并重置技能冷却。通关本关后即可在常规关卡永久解锁手推车！',
+    },
     { key: 'mg-25', name: '胆小菇之梦', sid: 1, pid: 9, sun: 300, waves: 12, zombies: [0, 2, 4, 8, 15], preset: [9, 6, 7, 8, 3], tips: '以胆小菇为主力的夜战，用坚果护住胆小菇避免退缩！' },
     { key: 'mg-28', name: '撑杆舞会', sid: 0, pid: 3, sun: 350, waves: 14, zombies: [0, 3, 6, 7, 91], spd: 1.15, tips: '撑杆家族与舞王撑杆齐聚，备好高坚果与阻挡植物！' },
     { key: 'mg-30', name: '二爷战争', sid: 0, pid: 1005, sun: 500, waves: 15, zombies: [5, 59, 82, 104], hp: 1.15, tips: '全员读报二爷来袭！破报后暴走移速极快，请注意控场！' },
@@ -963,6 +982,8 @@ export function getChallengeGroups(
             presetCards: m.preset,
             zombieHpMult: m.hp ?? 1,
             zombieSpeedMult: m.spd ?? 1,
+            wheelbarrowCooldown: m.wbCd,
+            forceUnlockTools: m.forceTools,
             tips: m.tips,
             challengeKey: m.key,
           },

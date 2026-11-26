@@ -1021,6 +1021,28 @@ button:disabled {
   margin-bottom: 0;
 }
 
+.th-status {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 15px;
+  vertical-align: middle;
+}
+
+.th-status.ok {
+  background: rgba(20, 83, 45, 0.9);
+  border: 1px solid #4ade80;
+  color: #dcfce7;
+}
+
+.th-status.locked {
+  background: rgba(120, 53, 15, 0.9);
+  border: 1px solid #f59e0b;
+  color: #fde68a;
+}
+
 .col-btns {
   display: flex;
   flex-direction: column;
@@ -2752,7 +2774,7 @@ button:disabled {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 6px;
 }
 
@@ -3028,6 +3050,7 @@ button:disabled {
 }
 
 .bh-ctrls {
+  margin-left: auto;
   display: flex;
   gap: 3px;
   flex-wrap: wrap;

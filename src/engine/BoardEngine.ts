@@ -17,6 +17,7 @@ import type {
   LoadedRig,
   PlantBehavior,
   PlantDef,
+  UnlockedToolsState,
   ZombieBehavior,
   ZombieDef,
 } from '../types/game';
@@ -299,6 +300,7 @@ export class BoardEngine {
   private readonly cellW: number;
   private readonly rowY0: number;
   private readonly cellH: number;
+  private readonly unlockedTools: UnlockedToolsState;
 
   constructor(hostEl: HTMLElement, config: BoardConfig, callbacks: BoardCallbacks) {
     this.hostEl = hostEl;
@@ -306,7 +308,8 @@ export class BoardEngine {
     this.callbacks = callbacks;
     this.sun = config.initialSun;
     this.autoCollect = saveManager.current.autoCollect;
-    this.fertilizerCharges = config.mode === 'sandbox' ? 9 : 1;
+    this.unlockedTools = saveManager.getUnlockedTools(config);
+    this.fertilizerCharges = this.unlockedTools.fertilizer ? (config.mode === 'sandbox' ? 9 : 1) : 0;
     if (config.towerConfig) {
       this.towerLivesLeft = config.towerConfig.maxLives;
       this.towerLivesMax = config.towerConfig.maxLives;
@@ -1118,7 +1121,7 @@ export class BoardEngine {
   }
 
   toggleShovel(): void {
-    if (this.phase !== 'playing' || this.config.mode === 'iz') return;
+    if (this.phase !== 'playing' || !this.unlockedTools.shovel) return;
     const next = !this.shovelActive;
     this.clearToolSelections();
     this.shovelActive = next;
@@ -1130,7 +1133,7 @@ export class BoardEngine {
   }
 
   toggleGlove(): void {
-    if (this.phase !== 'playing' || this.config.mode === 'iz') return;
+    if (this.phase !== 'playing' || !this.unlockedTools.glove) return;
     if (this.gloveCooldownLeft > 0.05 && !this.gloveHeldPlant && !this.gloveHeldZombie) {
       audio.playSfx('Buzzer', 0.6, 200);
       return;
@@ -1148,7 +1151,7 @@ export class BoardEngine {
   }
 
   toggleGloveMode(): void {
-    if (this.phase !== 'playing' || this.config.mode === 'iz') return;
+    if (this.phase !== 'playing' || !this.unlockedTools.glove) return;
     if (this.gloveHeldPlant || this.gloveHeldZombie) {
       audio.playSfx('Buzzer', 0.6, 120);
       return;
@@ -1159,7 +1162,7 @@ export class BoardEngine {
   }
 
   toggleHammer(): void {
-    if (this.phase !== 'playing' || this.config.mode === 'iz') return;
+    if (this.phase !== 'playing' || !this.unlockedTools.hammer) return;
     if (this.hammerCooldownLeft > 0.05) {
       audio.playSfx('Buzzer', 0.6, 200);
       return;
@@ -1172,7 +1175,7 @@ export class BoardEngine {
   }
 
   toggleWheelbarrow(): void {
-    if (this.phase !== 'playing' || this.config.mode === 'iz') return;
+    if (this.phase !== 'playing' || !this.unlockedTools.wheelbarrow) return;
     if (this.wheelbarrowCooldownLeft > 0.05 && !this.wheelbarrowStored) {
       audio.playSfx('Buzzer', 0.6, 200);
       return;
@@ -1185,7 +1188,7 @@ export class BoardEngine {
   }
 
   toggleFertilizer(): void {
-    if (this.phase !== 'playing' || this.config.mode === 'iz') return;
+    if (this.phase !== 'playing' || !this.unlockedTools.fertilizer) return;
     if (this.fertilizerCharges <= 0) {
       audio.playSfx('Buzzer', 0.6, 200);
       return;
@@ -1570,7 +1573,8 @@ export class BoardEngine {
       if (res) {
         this.wheelbarrowStored = null;
         this.wheelbarrowActive = false;
-        this.wheelbarrowCooldownLeft = this.config.zeroCooldown ? 0 : 30;
+        const wbCd = this.config.wheelbarrowCooldown ?? 30;
+        this.wheelbarrowCooldownLeft = this.config.zeroCooldown ? 0 : wbCd;
         this.emitHud();
       } else {
         audio.playSfx('Buzzer', 0.65, 180);
@@ -2093,7 +2097,7 @@ export class BoardEngine {
     if (this.wheelbarrowCooldownLeft > 0) {
       this.wheelbarrowCooldownLeft = Math.max(0, this.wheelbarrowCooldownLeft - dt);
     }
-    if (this.fertilizerCharges < 5) {
+    if (this.unlockedTools.fertilizer && this.fertilizerCharges < 5) {
       this.fertilizerTimer -= dt;
       if (this.fertilizerTimer <= 0) {
         this.fertilizerTimer = 70;
@@ -4082,6 +4086,7 @@ export class BoardEngine {
       maliangInk: Math.round(this.maliangInk),
       activeBoss,
       activeBuffLabels: this.config.modifiers?.activeBuffLabels ?? [],
+      unlockedTools: { ...this.unlockedTools },
       timeStopActive: this.timeStopActive,
       shovelActive: this.shovelActive,
       gloveActive: this.gloveActive,

@@ -361,6 +361,8 @@ export interface BoardConfig {
   presetCards?: number[];
   restrictToPresetCards?: boolean;
   gloveCooldown: number;
+  wheelbarrowCooldown?: number;
+  forceUnlockTools?: Partial<UnlockedToolsState>;
   difficulty: number; // 1..5
   zombieHpMult: number;
   zombieSpeedMult: number;
@@ -425,6 +427,16 @@ export interface ActiveBossHudInfo {
   armorMax: number;
 }
 
+export type BattleToolId = 'shovel' | 'glove' | 'hammer' | 'wheelbarrow' | 'fertilizer';
+
+export interface UnlockedToolsState {
+  shovel: boolean;
+  glove: boolean;
+  hammer: boolean;
+  wheelbarrow: boolean;
+  fertilizer: boolean;
+}
+
 export interface HudSnapshot {
   phase: 'choosing' | 'intro' | 'playing' | 'paused' | 'won' | 'lost';
   mode: BoardConfig['mode'];
@@ -453,6 +465,7 @@ export interface HudSnapshot {
   maliangInk: number;
   activeBoss: ActiveBossHudInfo | null;
   activeBuffLabels: string[];
+  unlockedTools: UnlockedToolsState;
   timeStopActive: boolean;
   shovelActive: boolean;
   gloveActive: boolean;

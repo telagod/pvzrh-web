@@ -2,16 +2,20 @@ import { assets } from '../assets/AssetLoader';
 import { audio } from '../audio/AudioManager';
 import type {
   AbyssRunState,
+  BattleToolId,
   BoardConfig,
   GardenSaveState,
   SaveProfile,
   SaveStore,
   TravelRunState,
+  UnlockedToolsState,
 } from '../types/game';
 import {
   evaluatePlantUnlocked,
   REWARD_TRACKED_PLANT_IDS,
   SUPER_CHALLENGE_UNLOCKS,
+  TOOL_UNLOCK_RULES,
+  TRACKED_UNLOCK_TOOLS,
 } from './plantUnlocks';
 
 const STORAGE_KEY = 'pvz_web_save_v1';
@@ -419,6 +423,45 @@ class SaveManager {
     }
     for (const id of prof.discoveredFusions) {
       out.add(id);
+    }
+    return out;
+  }
+
+  getUnlockedToolIds(): Set<BattleToolId> {
+    const out = new Set<BattleToolId>();
+    const prof = this.current;
+    for (const id of TRACKED_UNLOCK_TOOLS) {
+      if (TOOL_UNLOCK_RULES[id].check(prof)) {
+        out.add(id);
+      }
+    }
+    return out;
+  }
+
+  getUnlockedTools(board?: BoardConfig): UnlockedToolsState {
+    if (board?.mode === 'iz') {
+      return { shovel: false, glove: false, hammer: false, wheelbarrow: false, fertilizer: false };
+    }
+    if (board?.mode === 'sandbox') {
+      return { shovel: true, glove: true, hammer: true, wheelbarrow: true, fertilizer: true };
+    }
+    const prof = this.current;
+    const out: UnlockedToolsState = {
+      shovel: TOOL_UNLOCK_RULES.shovel.check(prof),
+      glove: TOOL_UNLOCK_RULES.glove.check(prof),
+      hammer: TOOL_UNLOCK_RULES.hammer.check(prof),
+      wheelbarrow: TOOL_UNLOCK_RULES.wheelbarrow.check(prof),
+      fertilizer: TOOL_UNLOCK_RULES.fertilizer.check(prof),
+    };
+    if (board?.mode === 'explore') {
+      out.glove = true;
+      const tips = board.tips ?? '';
+      if (tips.includes('手推车')) out.wheelbarrow = true;
+      if (tips.includes('锤子') || tips.includes('重锤') || tips.includes('大锤')) out.hammer = true;
+      if (tips.includes('肥料')) out.fertilizer = true;
+    }
+    if (board?.forceUnlockTools) {
+      Object.assign(out, board.forceUnlockTools);
     }
     return out;
   }

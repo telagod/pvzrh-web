@@ -1,8 +1,9 @@
 import { assets } from '../assets/AssetLoader';
 import { audio } from '../audio/AudioManager';
 import type { BoardEngine } from '../engine/BoardEngine';
+import { TOOL_UNLOCK_RULES } from '../save/plantUnlocks';
 import { saveManager } from '../save/SaveManager';
-import type { BoardConfig, HudSnapshot, PlantDef } from '../types/game';
+import type { BattleToolId, BoardConfig, HudSnapshot, PlantDef } from '../types/game';
 import { bindHoverImages, escHtml, formatUnityRichText, getCardFrameUrl } from './levelsCatalog';
 import { MaLiangPad } from './MaLiangPad';
 
@@ -47,6 +48,11 @@ export class BattleHud {
     zombieId: number;
   }[] = [];
   private conveyorElMap = new Map<number, HTMLButtonElement>();
+  private unitShovelEl!: HTMLElement;
+  private unitGloveEl!: HTMLElement;
+  private unitHammerEl!: HTMLElement;
+  private unitWheelbarrowEl!: HTMLElement;
+  private unitFertilizerEl!: HTMLElement;
   private shovelBtn!: HTMLButtonElement;
   private gloveBtn!: HTMLButtonElement;
   private gloveImgEl!: HTMLImageElement;
@@ -101,6 +107,8 @@ export class BattleHud {
     const isConv = Boolean(this.deps.config.conveyorMode);
     const hasTips = Boolean(formatUnityRichText(this.deps.config.tips));
     const buffLabels = this.deps.config.modifiers?.activeBuffLabels ?? [];
+    const wbCdSec = this.deps.config.wheelbarrowCooldown ?? 30;
+    const initTools = saveManager.getUnlockedTools(this.deps.config);
 
     this.host.innerHTML = `
       <div class="bh-shell" id="bh-shell" style="display:none">
@@ -118,7 +126,7 @@ export class BattleHud {
           </div>
 
           <div class="bh-tools" id="bh-tools" style="${isIz ? 'display:none' : ''}">
-            <div class="bh-tool-unit">
+            <div class="bh-tool-unit" id="bh-unit-shovel" style="${initTools.shovel ? '' : 'display:none'}">
               <button class="bh-tool-bank" id="bh-shovel" title="铲子 (Q)：铲除场上植物，无冷却">
                 <img class="bank-bg" src="assets/ui/shovel_bank.webp" alt="" />
                 <img class="tool-ico" src="assets/ui/shovel.webp" alt="铲子" />
@@ -126,7 +134,7 @@ export class BattleHud {
               <span class="bh-tool-cap">铲子</span>
             </div>
 
-            <div class="bh-tool-unit">
+            <div class="bh-tool-unit" id="bh-unit-glove" style="${initTools.glove ? '' : 'display:none'}">
               <button class="bh-tool-bank" id="bh-glove" title="融合手套 (E)：移动植物或僵尸；点击下方可切换 (V)">
                 <img class="bank-bg" src="assets/ui/shovel_bank.webp" alt="" />
                 <img class="tool-ico" id="bh-glove-img" src="assets/ui/glove.webp" alt="手套" />
@@ -136,7 +144,7 @@ export class BattleHud {
               <button class="bh-tool-cap is-switch" id="bh-glove-switch" title="点击切换植物手套 / 僵尸手套 (快捷键 V)">植手⇄</button>
             </div>
 
-            <div class="bh-tool-unit">
+            <div class="bh-tool-unit" id="bh-unit-hammer" style="${initTools.hammer ? '' : 'display:none'}">
               <button class="bh-tool-bank" id="bh-hammer" title="大锤 (H)：60秒冷却，对小范围僵尸造成百万重击（首领 5000）">
                 <img class="bank-bg" src="assets/ui/shovel_bank.webp" alt="" />
                 <img class="tool-ico" src="assets/ui/modes/hammer.webp" alt="大锤" />
@@ -145,8 +153,8 @@ export class BattleHud {
               <span class="bh-tool-cap" id="bh-hammer-lbl">大锤</span>
             </div>
 
-            <div class="bh-tool-unit">
-              <button class="bh-tool-bank" id="bh-wheelbarrow" title="手推车 (B)：暂存 1 株植物（不触发生成/亡语），再次放下可重置冷却（30秒）">
+            <div class="bh-tool-unit" id="bh-unit-wheelbarrow" style="${initTools.wheelbarrow ? '' : 'display:none'}">
+              <button class="bh-tool-bank" id="bh-wheelbarrow" title="手推车 (B)：暂存 1 株植物（不触发生成/亡语），再次放下可重置冷却（${wbCdSec}秒）">
                 <img class="bank-bg" src="assets/ui/shovel_bank.webp" alt="" />
                 <img class="tool-ico" src="assets/ui/modes/wheelbarrow.webp" alt="手推车" />
                 <img class="bh-tool-held-port" id="bh-wb-held" src="" alt="" style="display:none" />
@@ -155,7 +163,7 @@ export class BattleHud {
               <span class="bh-tool-cap" id="bh-wheelbarrow-lbl">手推车</span>
             </div>
 
-            <div class="bh-tool-unit">
+            <div class="bh-tool-unit" id="bh-unit-fertilizer" style="${initTools.fertilizer ? '' : 'display:none'}">
               <button class="bh-tool-bank" id="bh-fertilizer" title="肥料 (F)：每70秒自动+1袋（上限5），恢复本格满血、解冻并立即结束蓄力/消化冷却">
                 <img class="bank-bg" src="assets/ui/shovel_bank.webp" alt="" />
                 <img class="tool-ico" src="assets/ui/modes/fertilizer_lv2.webp" alt="肥料" />
@@ -229,6 +237,11 @@ export class BattleHud {
     this.conveyorWrap = this.host.querySelector('#bh-conveyor-wrap')!;
     this.conveyorTrack = this.host.querySelector('#bh-conv-track')!;
     this.toolsWrap = this.host.querySelector('#bh-tools')!;
+    this.unitShovelEl = this.host.querySelector('#bh-unit-shovel')!;
+    this.unitGloveEl = this.host.querySelector('#bh-unit-glove')!;
+    this.unitHammerEl = this.host.querySelector('#bh-unit-hammer')!;
+    this.unitWheelbarrowEl = this.host.querySelector('#bh-unit-wheelbarrow')!;
+    this.unitFertilizerEl = this.host.querySelector('#bh-unit-fertilizer')!;
     this.shovelBtn = this.host.querySelector('#bh-shovel')!;
     this.gloveBtn = this.host.querySelector('#bh-glove')!;
     this.gloveImgEl = this.host.querySelector('#bh-glove-img')!;
@@ -401,6 +414,12 @@ export class BattleHud {
         item.cdEl.style.height = `${pct}%`;
       });
     }
+
+    this.unitShovelEl.style.display = snap.unlockedTools.shovel ? 'flex' : 'none';
+    this.unitGloveEl.style.display = snap.unlockedTools.glove ? 'flex' : 'none';
+    this.unitHammerEl.style.display = snap.unlockedTools.hammer ? 'flex' : 'none';
+    this.unitWheelbarrowEl.style.display = snap.unlockedTools.wheelbarrow ? 'flex' : 'none';
+    this.unitFertilizerEl.style.display = snap.unlockedTools.fertilizer ? 'flex' : 'none';
 
     this.shovelBtn.classList.toggle('active', snap.shovelActive);
     this.gloveBtn.classList.toggle('active', snap.gloveActive);
@@ -710,19 +729,25 @@ export class BattleHud {
   }
 
   private showToolsHelpModal(): void {
+    const unlocked = this.deps.board.getSnapshot().unlockedTools;
+    const badge = (id: BattleToolId) =>
+      unlocked[id]
+        ? '<span class="th-status ok">已解锁</span>'
+        : `<span class="th-status locked">未解锁 · ${escHtml(TOOL_UNLOCK_RULES[id].hint)}</span>`;
+    const wbCdSec = this.deps.config.wheelbarrowCooldown ?? 30;
     this.modalHost.innerHTML = `
       <div class="pvz-modal-backdrop">
         <div class="pvz-tomb-dialog">
           <img class="pvz-tomb-bg" src="assets/ui/options_menuback.webp" alt="" />
           <div class="pvz-tomb-inner">
-            <div class="pvz-tomb-hdr">战斗工具与快捷键说明</div>
+            <div class="pvz-tomb-hdr">战斗工具与解锁说明</div>
             <div class="help-text">
-              <p><strong>铲子 (Q)</strong>：铲除场上植物，无冷却。</p>
-              <p><strong>植物 / 僵尸手套 (E · 点「植手⇄」或 V 切换)</strong>：移动植物（密植/载体/飞行类仅 1/3 冷却）或抓取普通/魅惑僵尸换行（首领免疫，冷却 30s / 魅惑 15s）。</p>
-              <p><strong>大锤 (H)</strong>：60 秒冷却，对小范围僵尸造成百万重击（首领 5000）。</p>
-              <p><strong>手推车 (B)</strong>：暂存 1 株植物进车内且不触发生成/亡语；再次放下时保留血量并重置技能/属性冷却，随后进入 30 秒冷却（不能收纳机械坚果）。</p>
-              <p><strong>肥料 (F)</strong>：每 70 秒自动补充 1 袋（上限 5），恢复本格满血、解冻并立即结束地雷/吞咽/磁石等蓄力冷却。</p>
-              <p><strong>时停 (T)</strong>：切换全局 0.2 倍慢速，方便精准操作与极限融合。</p>
+              <p><strong>铲子 (Q)</strong> ${badge('shovel')}：铲除场上植物，无冷却。</p>
+              <p><strong>植物 / 僵尸手套 (E · 点「植手⇄」或 V 切换)</strong> ${badge('glove')}：移动植物（密植/载体/飞行类仅 1/3 冷却）或抓取普通/魅惑僵尸换行（首领免疫，冷却 30s / 魅惑 15s）。</p>
+              <p><strong>肥料 (F)</strong> ${badge('fertilizer')}：每 70 秒自动补充 1 袋（上限 5），恢复本格满血、解冻并立即结束地雷/吞咽/磁石等蓄力冷却。</p>
+              <p><strong>大锤 (H)</strong> ${badge('hammer')}：60 秒冷却，对小范围僵尸造成百万重击（首领 5000）。</p>
+              <p><strong>手推车 (B)</strong> ${badge('wheelbarrow')}：暂存 1 株植物进车内且不触发生成/亡语；再次放下时保留血量并重置技能冷却，进入 ${wbCdSec} 秒冷却（不能收纳机械坚果）。</p>
+              <p><strong>时停 (T)</strong> <span class="th-status ok">初始解锁</span>：切换全局 0.2 倍慢速，方便精准操作与极限融合。</p>
               <p><strong>其它快捷</strong>：<code>1-9/0</code> 选卡 · <code>Space</code> 暂停 · <code>右键</code> 取消选中。</p>
             </div>
             <button class="pvz-tomb-done-btn" id="thm-resume">
@@ -823,6 +848,7 @@ export class BattleHud {
     won: boolean,
     stats: { kills: number; fusions: number; elapsedSec: number; wavesCleared: number },
     newlyUnlocked: number[] = [],
+    newlyUnlockedTools: BattleToolId[] = [],
   ): void {
     const isIz = this.deps.config.mode === 'iz';
     const isVase = this.deps.config.mode === 'vasebreaker';
@@ -841,10 +867,16 @@ export class BattleHud {
     const canNext = Boolean(won && this.deps.hasNextLevel && this.deps.onNextLevel);
     const nextLabel = this.deps.customNextLabel ?? '下一关';
     const backLabel = this.deps.customExitLabel ?? (this.deps.fromMainMenu ? '返回主菜单' : '返回选关');
-    const unlockedHtml =
-      won && newlyUnlocked.length > 0
-        ? `<div class="bh-unlock-banner">
-            <div class="bh-unlock-title">🎉 解锁新植物</div>
+    const hasAnyUnlock = won && (newlyUnlocked.length > 0 || newlyUnlockedTools.length > 0);
+    const unlockTitle =
+      newlyUnlocked.length > 0 && newlyUnlockedTools.length > 0
+        ? '🎉 解锁新植物与道具'
+        : newlyUnlockedTools.length > 0
+          ? '🎉 解锁新道具'
+          : '🎉 解锁新植物';
+    const unlockedHtml = hasAnyUnlock
+      ? `<div class="bh-unlock-banner">
+            <div class="bh-unlock-title">${unlockTitle}</div>
             <div class="bh-unlock-list">
               ${newlyUnlocked
                 .map((pid) => {
@@ -853,9 +885,15 @@ export class BattleHud {
                   return `<div class="bh-unlock-item"><img src="assets/portraits/plants/${p.portrait}" alt="${escHtml(p.name)}" /><span>${escHtml(p.name)}</span></div>`;
                 })
                 .join('')}
+              ${newlyUnlockedTools
+                .map((tid) => {
+                  const meta = TOOL_UNLOCK_RULES[tid];
+                  return `<div class="bh-unlock-item"><img src="${meta.icon}" alt="${escHtml(meta.name)}" /><span>${escHtml(meta.name)}</span></div>`;
+                })
+                .join('')}
             </div>
           </div>`
-        : '';
+      : '';
 
     this.modalHost.innerHTML = `
       <div class="pvz-modal-backdrop">
