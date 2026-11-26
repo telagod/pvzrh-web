@@ -1350,8 +1350,9 @@ def main():
     # 5. Compile Common Animated Rigs (LawnMower, PoolCleaner, Sun, BigSun, Squalour)
     print("5. Compiling common animated rigs (mower, sun, squalour)...")
     COMMON_SPECS = {
-        "mower_lawn": "mower/cleaner/cleanerprefab",
+        "mower_lawn": "mower/lawn/lawnmowerprefab",
         "mower_pool": "mower/pool/poolcleanerprefab",
+        "mower_roof": "mower/cleaner/cleanerprefab",
         "sun": "items/sun/sun",
         "bigsun": "items/sun/bigsun",
         "bluesun": "items/sun/bluesun",

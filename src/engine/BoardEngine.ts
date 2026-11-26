@@ -150,7 +150,9 @@ interface MowerInstance {
   row: number;
   x: number;
   y: number;
+  kind: 'lawn' | 'pool' | 'roof';
   isWater: boolean;
+  inWater: boolean;
   active: boolean;
   triggered: boolean;
   removed: boolean;
@@ -554,17 +556,30 @@ export class BoardEngine {
       return;
     }
     const waterRows = new Set(this.config.scene.waterRows);
-    const lawnRig = await assets.loadCommonRig('mower_lawn');
-    const poolRig = await assets.loadCommonRig('mower_pool');
+    const isRoof = Boolean(this.config.scene.roof);
+    const rowKinds: ('lawn' | 'pool' | 'roof')[] = [];
+    for (let r = 0; r < this.rows; r++) {
+      rowKinds.push(waterRows.has(r) ? 'pool' : isRoof ? 'roof' : 'lawn');
+    }
+
+    const needLawn = rowKinds.includes('lawn');
+    const needPool = rowKinds.includes('pool');
+    const needRoof = rowKinds.includes('roof');
+    const [lawnRig, poolRig, roofRig] = await Promise.all([
+      needLawn ? assets.loadCommonRig('mower_lawn') : Promise.resolve(null),
+      needPool ? assets.loadCommonRig('mower_pool') : Promise.resolve(null),
+      needRoof ? assets.loadCommonRig('mower_roof') : Promise.resolve(null),
+    ]);
 
     for (let r = 0; r < this.rows; r++) {
-      const isW = waterRows.has(r);
-      const rigData = isW ? poolRig ?? lawnRig : lawnRig;
+      const kind = rowKinds[r];
+      const isW = kind === 'pool';
+      const rigData = kind === 'pool' ? (poolRig ?? lawnRig) : kind === 'roof' ? (roofRig ?? lawnRig) : lawnRig;
       const container = new Container();
       const x = BOARD_X - 32;
       const y = this.rowGroundY(r);
       container.position.set(x, y);
-      container.scale.set(isW ? 0.66 : 0.56);
+      container.scale.set(kind === 'pool' ? 0.66 : 0.56);
       this.groundLayer.addChild(container);
 
       let rig: UnityRigInstance | null = null;
@@ -572,14 +587,18 @@ export class BoardEngine {
       if (rigData) {
         rig = new UnityRigInstance(rigData);
         container.addChild(rig.container);
-        animator = new UnityAnimator(rig, isW ? 'idle_water' : 'idle_land');
+        if (kind !== 'lawn') {
+          animator = new UnityAnimator(rig, 'idle_land');
+        }
       }
 
       this.mowers.push({
         row: r,
         x,
         y,
+        kind,
         isWater: isW,
+        inWater: false,
         active: true,
         triggered: false,
         removed: false,
@@ -3543,7 +3562,16 @@ export class BoardEngine {
           const mower = this.mowers[z.row];
           if (mower && mower.active && !mower.triggered && !mower.removed) {
             mower.triggered = true;
-            mower.animator?.playBase(mower.isWater ? 'move_water' : 'move_land', true);
+            if (mower.kind === 'lawn') {
+              if (!mower.animator && mower.rig) {
+                mower.animator = new UnityAnimator(mower.rig, 'move');
+              } else {
+                const clip = mower.animator?.hasClip('move') ? 'move' : 'walk';
+                mower.animator?.playBase(clip, true);
+              }
+            } else {
+              mower.animator?.playBase('move_land', true);
+            }
             audio.playSfx(mower.isWater ? 'PoolCleaner' : 'LawnMower', 0.95, 100);
           } else if (z.x <= BOARD_X - 75) {
             this.finishBattle(false);
@@ -3598,11 +3626,17 @@ export class BoardEngine {
   private updateMowers(dt: number): void {
     for (const m of this.mowers) {
       if (m.removed) continue;
-      m.animator?.update(dt);
+      if (m.kind !== 'lawn' || m.triggered) {
+        m.animator?.update(dt);
+      }
       if (!m.triggered) continue;
 
       m.x += 460 * dt;
       m.container.position.set(m.x, m.y);
+      if (m.kind === 'pool' && !m.inWater && m.x >= BOARD_X + 8) {
+        m.inWater = true;
+        m.animator?.playBase('move_water', true);
+      }
       for (const z of this.zombies) {
         if (!z.removed && !z.dying && !z.hypnotized && z.row === m.row && Math.abs(z.x - m.x) < 55) {
           this.killZombie(z);

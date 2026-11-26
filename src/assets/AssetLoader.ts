@@ -171,7 +171,7 @@ class AssetLoader {
   }
 
   loadCommonRig(
-    name: 'mower_lawn' | 'mower_pool' | 'sun' | 'bigsun' | 'bluesun' | 'squalour',
+    name: 'mower_lawn' | 'mower_pool' | 'mower_roof' | 'sun' | 'bigsun' | 'bluesun' | 'squalour',
   ): Promise<LoadedRig | null> {
     return this._loadRig(`common:${name}`, `assets/rigs/common/${name}.json`);
   }
