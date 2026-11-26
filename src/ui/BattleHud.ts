@@ -697,27 +697,33 @@ export class BattleHud {
 
     this.modalHost.innerHTML = `
       <div class="pvz-modal-backdrop">
-        <div class="pvz-tomb-dialog compact">
+        <div class="pvz-tomb-dialog end-modal">
           <img class="pvz-tomb-bg" src="assets/ui/options_menuback.webp" alt="" />
           <div class="pvz-tomb-inner">
             <div class="pvz-tomb-hdr">${hdr}</div>
-            <img class="${won ? 'bh-trophy-img' : 'bh-gameover-img'}" src="assets/ui/${won ? 'trophy.webp' : 'gameover.webp'}" alt="" />
-            ${unlockedHtml}
+            <div class="bh-end-hero ${unlockedHtml ? 'has-unlock' : ''}">
+              <img class="${won ? 'bh-trophy-img' : 'bh-gameover-img'}" src="assets/ui/${won ? 'trophy.webp' : 'gameover.webp'}" alt="" />
+              ${unlockedHtml}
+            </div>
             <div class="bh-end-stats">
               <div>${isIz ? '植物阵' : isVase ? '破罐' : '波次'}：<strong>${isVase ? `${this.deps.config.vasebreakerConfig?.vases.length ?? 0}` : stats.wavesCleared}</strong></div>
               <div>击杀：<strong>${stats.kills}</strong></div>
               <div>融合：<strong>${stats.fusions}</strong></div>
               <div>耗时：<strong>${stats.elapsedSec}s</strong></div>
             </div>
-            <div class="col-btns">
-              ${canNext ? `<button class="btn-wood-big gold" id="em-next">${escHtml(nextLabel)}</button>` : ''}
-              <button class="btn-wood-big" id="em-retry">再玩一次</button>
+            <div class="bh-end-sec-row">
+              ${canNext ? '<button class="btn-wood-big" id="em-retry">再玩一次</button>' : ''}
               <button class="btn-wood-big" id="em-levels">${escHtml(backLabel)}</button>
             </div>
+            <button class="pvz-tomb-done-btn" id="${canNext ? 'em-next' : 'em-retry'}">
+              <img src="assets/ui/options_backtogame.webp" data-base="assets/ui/options_backtogame.webp" data-hl="assets/ui/options_backtogame_hl.webp" alt="${escHtml(canNext ? nextLabel : '再玩一次')}" />
+              <span>${escHtml(canNext ? nextLabel : '再玩一次')}</span>
+            </button>
           </div>
         </div>
       </div>
     `;
+    bindHoverImages(this.modalHost);
     this.modalHost.querySelector('#em-next')?.addEventListener('click', () => {
       this.deps.onNextLevel?.();
     });

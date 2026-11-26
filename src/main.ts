@@ -58,11 +58,13 @@ class PvzWebApp {
       document.documentElement.style.setProperty('--vw', `${vw}px`);
       document.documentElement.style.setProperty('--vh', `${vh}px`);
       const isPortrait = vh > vw;
-      const isMobileLike =
-        (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches) ||
-        navigator.maxTouchPoints > 0 ||
-        vw <= 900;
-      document.body.classList.toggle('force-landscape', isPortrait && isMobileLike);
+      const hasCoarse =
+        typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+      const hasFine =
+        typeof window.matchMedia === 'function' && window.matchMedia('(pointer: fine)').matches;
+      const isMobileUA = /Android|iPhone|iPod|Mobile|HarmonyOS|MicroMessenger/i.test(navigator.userAgent);
+      const isTouchPhone = (hasCoarse && !hasFine) || isMobileUA;
+      document.body.classList.toggle('force-landscape', isPortrait && isTouchPhone);
 
       const updateUiVar = () => {
         const w = this.stageShell.clientWidth || 1066;
@@ -85,7 +87,10 @@ class PvzWebApp {
     window.addEventListener(
       'pointerdown',
       () => {
-        if (document.body.classList.contains('force-landscape') || navigator.maxTouchPoints > 0) {
+        if (
+          document.body.classList.contains('force-landscape') ||
+          /Android|iPhone|iPod|Mobile|HarmonyOS/i.test(navigator.userAgent)
+        ) {
           tryLockLandscape();
         }
       },
