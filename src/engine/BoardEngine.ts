@@ -2242,6 +2242,24 @@ export class BoardEngine {
       return;
     }
     const maxWaves = Math.max(1, this.config.maxWaves);
+
+    // Staggered budget-based zombie spawning (must run even during Final Wave!)
+    if (this.waveBudgetRemaining > 0) {
+      this.waveSpawnCooldown -= dt;
+      if (this.waveSpawnCooldown <= 0) {
+        const zId = this.pickZombieForWave(this.waveBudgetRemaining);
+        const costVal = Math.max(50, assets.getZombie(zId)?.val ?? 50);
+        this.waveBudgetRemaining -= costVal;
+        if (this.waveBudgetRemaining < 50) {
+          this.waveBudgetRemaining = 0;
+        }
+        void this.spawnZombieAt(zId);
+        this.waveSpawnCooldown = this.currentWaveIsHuge
+          ? 0.55 + Math.random() * 0.45
+          : 1.2 + Math.random() * 0.9;
+      }
+    }
+
     const aliveHostiles = this.zombies.filter((z) => !z.dying && !z.hypnotized && !z.removed).length;
 
     if (this.currentWave >= maxWaves) {
@@ -2273,23 +2291,6 @@ export class BoardEngine {
         this.finishBattle(true);
       }
       return;
-    }
-
-    // Staggered budget-based zombie spawning
-    if (this.waveBudgetRemaining > 0) {
-      this.waveSpawnCooldown -= dt;
-      if (this.waveSpawnCooldown <= 0) {
-        const zId = this.pickZombieForWave(this.waveBudgetRemaining);
-        const costVal = Math.max(50, assets.getZombie(zId)?.val ?? 50);
-        this.waveBudgetRemaining -= costVal;
-        if (this.waveBudgetRemaining < 50) {
-          this.waveBudgetRemaining = 0;
-        }
-        void this.spawnZombieAt(zId);
-        this.waveSpawnCooldown = this.currentWaveIsHuge
-          ? 0.55 + Math.random() * 0.45
-          : 1.2 + Math.random() * 0.9;
-      }
     }
 
     // Early-clear breather when current wave zombies are all defeated
@@ -3240,6 +3241,9 @@ export class BoardEngine {
 
   private killZombie(z: ZombieInstance): void {
     if (z.dying || z.removed) return;
+    if (this.gloveHeldZombie === z) {
+      this.gloveHeldZombie = null;
+    }
     z.dying = true;
     z.hpBar.visible = false;
     this.kills++;
