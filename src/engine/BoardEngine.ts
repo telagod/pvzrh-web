@@ -2214,7 +2214,7 @@ export class BoardEngine {
     }
 
     this.hudEmitAcc += rawDt;
-    if (this.hudEmitAcc >= 0.08) {
+    if (this.hudEmitAcc >= 0.05) {
       this.hudEmitAcc = 0;
       this.emitHud();
     }

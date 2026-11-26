@@ -1,5 +1,6 @@
 import './styles.css';
 import { assets } from './assets/AssetLoader';
+import { audio } from './audio/AudioManager';
 import { BoardEngine } from './engine/BoardEngine';
 import { fusionSystem } from './engine/FusionSystem';
 import { clampDifficulty } from './save/difficulty';
@@ -666,6 +667,7 @@ class PvzWebApp {
       getMetrics: () => ({
         screen: this.screen,
         loading: this.loading.getState(),
+        audio: audio.getDebugState(),
         board: this.activeBoard?.getDebugMetrics() ?? null,
         hud: this.activeBoard?.getSnapshot() ?? null,
       }),

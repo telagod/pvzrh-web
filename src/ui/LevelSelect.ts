@@ -137,6 +137,7 @@ export class LevelSelect {
   }
 
   mount(): void {
+    void audio.playBgm('MainMenu');
     this.render();
   }
 

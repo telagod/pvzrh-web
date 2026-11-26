@@ -48,6 +48,8 @@ export class BattleHud {
   private cardEls: {
     btn: HTMLButtonElement;
     cdEl: HTMLElement;
+    cdTimeEl: HTMLElement;
+    wasCooling: boolean;
     plantId: number;
   }[] = [];
   private izCardEls: {
@@ -427,10 +429,31 @@ export class BattleHud {
       snap.cards.forEach((c, idx) => {
         const item = this.cardEls[idx];
         if (!item) return;
+        const cooling = c.cooldownLeft > 0.05 && c.cooldownTotal > 0;
+        const sunShort = !snap.infiniteSun && snap.sun < c.cost;
         item.btn.classList.toggle('selected', idx === snap.selectedCardIndex);
-        item.btn.classList.toggle('unaffordable', !c.affordable);
-        const pct = c.cooldownTotal > 0 ? Math.min(100, (c.cooldownLeft / c.cooldownTotal) * 100) : 0;
-        item.cdEl.style.height = `${pct}%`;
+        item.btn.classList.toggle('cooling', cooling);
+        item.btn.classList.toggle('sun-short', sunShort);
+        item.btn.classList.toggle('unaffordable', cooling || sunShort);
+        if (cooling) {
+          const pct = Math.max(0, Math.min(100, (c.cooldownLeft / c.cooldownTotal) * 100));
+          item.cdEl.style.height = `${pct.toFixed(1)}%`;
+          item.cdEl.style.display = 'block';
+          item.cdTimeEl.textContent =
+            c.cooldownLeft >= 10 ? `${Math.ceil(c.cooldownLeft)}s` : `${c.cooldownLeft.toFixed(1)}s`;
+          item.cdTimeEl.style.display = 'flex';
+        } else {
+          item.cdEl.style.height = '0%';
+          item.cdEl.style.display = 'none';
+          item.cdTimeEl.textContent = '';
+          item.cdTimeEl.style.display = 'none';
+          if (item.wasCooling) {
+            item.btn.classList.remove('cd-ready-flash');
+            void item.btn.offsetWidth;
+            item.btn.classList.add('cd-ready-flash');
+          }
+        }
+        item.wasCooling = cooling;
       });
     }
 
@@ -703,13 +726,18 @@ export class BattleHud {
         <img class="pkt-portrait" src="assets/portraits/plants/${p?.portrait ?? `p_${c.plantId}.webp`}" alt="" />
         ${c.isSubCard ? '<span class="pkt-sub-badge">副</span>' : ''}
         <span class="pkt-cost">${c.cost}</span>
+        <div class="bh-card-shadow"></div>
         <div class="bh-card-cd"></div>
+        <span class="bh-card-cd-time"></span>
+        <div class="bh-card-flash"></div>
       `;
       btn.addEventListener('click', () => this.deps.board.setSelectedCard(idx));
       this.cardsEl.appendChild(btn);
       this.cardEls.push({
         btn,
         cdEl: btn.querySelector('.bh-card-cd')!,
+        cdTimeEl: btn.querySelector('.bh-card-cd-time')!,
+        wasCooling: c.cooldownLeft > 0.05 && c.cooldownTotal > 0,
         plantId: c.plantId,
       });
     });

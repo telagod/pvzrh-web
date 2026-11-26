@@ -17,6 +17,9 @@ class AudioManager {
   private currentBgmKey: string | null = null;
   private currentBgmSource: AudioBufferSourceNode | null = null;
   private pendingBgm: { key: string; loop: boolean } | null = null;
+  private bgmSeq = 0;
+  private bgmLoadingKey: string | null = null;
+  private readonly activeBgmSources = new Set<AudioBufferSourceNode>();
 
   private bgmVol = 0.55;
   private sfxVol = 0.85;
@@ -57,13 +60,17 @@ class AudioManager {
     if (!ctx) {
       return;
     }
-    if (ctx.state === 'suspended') {
-      ctx.resume().catch(() => {});
-    }
     this.unlocked = true;
-    if (this.pendingBgm && !this.currentBgmSource) {
-      const { key, loop } = this.pendingBgm;
-      void this.playBgm(key, loop);
+    const kickPending = () => {
+      if (this.pendingBgm && !this.currentBgmSource && !this.bgmLoadingKey) {
+        const { key, loop } = this.pendingBgm;
+        void this.playBgm(key, loop);
+      }
+    };
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(kickPending).catch(() => {});
+    } else {
+      kickPending();
     }
   }
 
@@ -167,53 +174,99 @@ class AudioManager {
     }
   }
 
+  private killAllBgmSources(): void {
+    for (const src of this.activeBgmSources) {
+      src.onended = null;
+      try {
+        src.stop();
+        src.disconnect();
+      } catch {
+        // Ignore already stopped
+      }
+    }
+    this.activeBgmSources.clear();
+    this.currentBgmSource = null;
+  }
+
   async playBgm(key: string, loop = true): Promise<void> {
     const resolved = this.resolveKey(key) ?? key;
-    if (this.currentBgmKey === resolved && this.currentBgmSource) {
+    this.pendingBgm = { key: resolved, loop };
+    if (
+      this.currentBgmKey === resolved &&
+      (this.currentBgmSource !== null || this.bgmLoadingKey === resolved)
+    ) {
       return;
     }
-    this.pendingBgm = { key: resolved, loop };
     const ctx = this.ensureContext();
     if (!ctx || (!this.unlocked && ctx.state === 'suspended')) {
       return;
     }
-    this.stopBgm(true);
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+
+    const seq = ++this.bgmSeq;
+    this.killAllBgmSources();
     this.currentBgmKey = resolved;
-    const buf = await this.loadBuffer(resolved);
-    if (!buf || this.currentBgmKey !== resolved || !this.bgmGain) {
+    this.bgmLoadingKey = resolved;
+
+    let buf: AudioBuffer | null = null;
+    try {
+      buf = await this.loadBuffer(resolved);
+    } finally {
+      if (this.bgmSeq === seq) {
+        this.bgmLoadingKey = null;
+      }
+    }
+    if (seq !== this.bgmSeq || !buf || this.currentBgmKey !== resolved || !this.bgmGain) {
       return;
     }
     try {
+      this.killAllBgmSources();
       const src = ctx.createBufferSource();
       src.buffer = buf;
       src.loop = loop;
       src.connect(this.bgmGain);
-      src.start();
+      this.activeBgmSources.add(src);
       this.currentBgmSource = src;
       src.onended = () => {
+        this.activeBgmSources.delete(src);
         if (this.currentBgmSource === src) {
           this.currentBgmSource = null;
         }
       };
+      src.start();
     } catch {
       // Ignore autoplay errors until user interaction unlocks context
     }
   }
 
   stopBgm(keepPending = false): void {
+    this.bgmSeq++;
+    this.bgmLoadingKey = null;
     if (!keepPending) {
       this.pendingBgm = null;
     }
     this.currentBgmKey = null;
-    if (this.currentBgmSource) {
-      try {
-        this.currentBgmSource.stop();
-        this.currentBgmSource.disconnect();
-      } catch {
-        // Ignore already stopped
-      }
-      this.currentBgmSource = null;
-    }
+    this.killAllBgmSources();
+  }
+
+  getDebugState(): {
+    activeBgmCount: number;
+    currentBgmKey: string | null;
+    bgmLoadingKey: string | null;
+    pendingBgmKey: string | null;
+    unlocked: boolean;
+    state: AudioContextState | 'none';
+  } {
+    return {
+      activeBgmCount: this.activeBgmSources.size,
+      currentBgmKey: this.currentBgmKey,
+      bgmLoadingKey: this.bgmLoadingKey,
+      pendingBgmKey: this.pendingBgm?.key ?? null,
+      unlocked: this.unlocked,
+      state: this.ctx?.state ?? 'none',
+    };
   }
 
   playSfx(keyOrList: string | string[], volume = 1.0, cooldownMs = 55): void {
