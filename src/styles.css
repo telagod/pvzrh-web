@@ -708,6 +708,24 @@ button:disabled {
   justify-content: center;
 }
 
+.mm-small-stone.difficulty {
+  left: 939.6px;
+  top: 438.1px;
+  width: 124.9px;
+  height: 52.0px;
+  z-index: 45;
+}
+
+.mm-small-stone.difficulty span {
+  font-size: 13.5px;
+}
+
+.mm-small-stone.difficulty[data-diff='1'] span { color: #4ade80; }
+.mm-small-stone.difficulty[data-diff='2'] span { color: #fde047; }
+.mm-small-stone.difficulty[data-diff='3'] span { color: #fb923c; }
+.mm-small-stone.difficulty[data-diff='4'] span { color: #f87171; }
+.mm-small-stone.difficulty[data-diff='5'] span { color: #d8b4fe; }
+
 .mm-small-stone.update {
   left: 939.6px;
   top: 489.4px;
@@ -829,12 +847,18 @@ button:disabled {
 }
 
 .pvz-tomb-dialog.pause .pvz-tomb-inner {
-  padding: 104px 56px 24px;
-  gap: 4px;
+  padding: 100px 54px 20px;
+  gap: 3px;
 }
 
 .pvz-tomb-dialog.pause .btn-wood-big {
-  height: 35px;
+  height: 30px;
+  font-size: 12.5px;
+}
+
+.pvz-tomb-dialog.pause .pvz-tomb-done-btn {
+  width: 236px;
+  height: 42px;
 }
 
 .pvz-tomb-hdr {
@@ -987,6 +1011,12 @@ button:disabled {
   text-align: center;
 }
 
+.opts-body {
+  gap: 5px;
+  padding-top: 98px;
+  padding-bottom: 24px;
+}
+
 .opts-body .opt-row,
 .opts-body .opt-check {
   width: 100%;
@@ -1000,6 +1030,103 @@ button:disabled {
 .opts-body .opt-check {
   justify-content: flex-start;
   gap: 8px;
+}
+
+.opt-diff-block {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.52);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.opt-diff-block.compact {
+  padding: 4px 7px;
+  gap: 3px;
+}
+
+.opt-diff-block input[type='range'] {
+  width: 100%;
+  height: 16px;
+}
+
+.opt-diff-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #e2e8f0;
+  font-weight: 700;
+}
+
+.opt-diff-val {
+  font-weight: 900;
+  text-shadow: 0 1px 2px #000;
+}
+
+.opt-diff-val[data-diff='1'],
+.bh-diff-pill[data-diff='1'],
+.sc-diff-picker[data-diff='1'] .sc-diff-label { color: #4ade80; }
+.opt-diff-val[data-diff='2'],
+.bh-diff-pill[data-diff='2'],
+.sc-diff-picker[data-diff='2'] .sc-diff-label { color: #fde047; }
+.opt-diff-val[data-diff='3'],
+.bh-diff-pill[data-diff='3'],
+.sc-diff-picker[data-diff='3'] .sc-diff-label { color: #fb923c; }
+.opt-diff-val[data-diff='4'],
+.bh-diff-pill[data-diff='4'],
+.sc-diff-picker[data-diff='4'] .sc-diff-label { color: #f87171; }
+.opt-diff-val[data-diff='5'],
+.bh-diff-pill[data-diff='5'],
+.sc-diff-picker[data-diff='5'] .sc-diff-label { color: #d8b4fe; }
+
+.opt-diff-pills {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+}
+
+.opt-diff-pill {
+  position: relative;
+  padding: 3px 0;
+  border-radius: 5px;
+  border: 1px solid #475569;
+  background: rgba(30, 41, 59, 0.85);
+  color: #cbd5e1;
+  font-size: 10.5px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.opt-diff-pill.is-default::after {
+  content: '';
+  position: absolute;
+  left: 28%;
+  right: 28%;
+  bottom: 1px;
+  height: 1.5px;
+  background: rgba(250, 204, 21, 0.55);
+  border-radius: 1px;
+}
+
+.opt-diff-pill.active {
+  background: linear-gradient(180deg, #b45309, #78350f);
+  border-color: #facc15;
+  color: #fef08a;
+  box-shadow: 0 0 6px rgba(250, 204, 21, 0.45);
+}
+
+.opt-diff-desc {
+  font-size: 10.5px;
+  line-height: 1.28;
+  color: #cbd5e1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .help-text {
@@ -2493,6 +2620,57 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+}
+
+.sc-diff-picker {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 7px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(78, 44, 18, 0.94), rgba(43, 22, 8, 0.96));
+  border: 2px solid #92400e;
+  box-shadow: inset 0 1px 0 rgba(254, 240, 138, 0.2), 0 3px 10px rgba(0, 0, 0, 0.55);
+  flex-shrink: 0;
+}
+
+.sc-diff-label {
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.1;
+  text-shadow: 0 1px 2px #000;
+}
+
+.sc-diff-btns {
+  display: flex;
+  gap: 3px;
+}
+
+.sc-diff-btn {
+  width: 24px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid #78350f;
+  background: rgba(15, 23, 42, 0.78);
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.sc-diff-btn.is-default {
+  border-color: rgba(250, 204, 21, 0.55);
+}
+
+.sc-diff-btn.active {
+  background: linear-gradient(180deg, #eab308, #b45309);
+  border-color: #fef08a;
+  color: #1c1917;
+  box-shadow: 0 0 6px rgba(250, 204, 21, 0.55);
 }
 
 .sc-bank-official {
@@ -3154,6 +3332,22 @@ button:disabled {
 .bh-level-name {
   font-weight: 800;
   color: #fde68a;
+}
+
+.bh-diff-pill {
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid #92400e;
+  background: rgba(15, 23, 42, 0.78);
+  font-size: 10.5px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bh-diff-pill:hover {
+  filter: brightness(1.12);
+  border-color: #facc15;
 }
 
 .bh-flagmeter {

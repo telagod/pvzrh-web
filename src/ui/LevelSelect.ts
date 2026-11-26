@@ -1,5 +1,11 @@
 import { assets } from '../assets/AssetLoader';
 import { audio } from '../audio/AudioManager';
+import {
+  DIFFICULTY_LEVELS,
+  clampDifficulty,
+  formatDifficultyBadge,
+  formatDifficultyFull,
+} from '../save/difficulty';
 import { saveManager } from '../save/SaveManager';
 import type { BoardConfig, ExploreLevelDef, IzLevelEntry } from '../types/game';
 import {
@@ -47,8 +53,6 @@ const CHALLENGES_ROW_YS = [111.3, 255.6, 400.0];
 const EXPLORE_ROW_YS = [132.0, 316.0];
 const EXPLORE_PAGE_SIZE = 12;
 const GRID_PAGE_SIZE = 18;
-
-const DIFF_LABELS = ['简单模式', '普通模式', '困难模式', '极难模式', '炼狱模式'];
 
 const IZ_GROUPS: { key: string; label: string; match: (ord: number) => boolean }[] = [
   { key: 'all', label: '全部关卡', match: () => true },
@@ -340,7 +344,7 @@ export class LevelSelect {
         ${this.renderStarButton(736.8, '切换难度', 'id="ls-diff-cycle"')}
 
         <button class="ls-star-meta ls-star-ch-readout" id="ls-star-help" title="查看难度介绍">章节难度：${ch.chapter * 2}</button>
-        <div class="ls-star-meta ls-star-diff-readout">${DIFF_LABELS[difficulty - 1] ?? '普通模式'}</div>
+        <div class="ls-star-meta ls-star-diff-readout">${formatDifficultyFull(difficulty)}</div>
       </div>
     `;
 
@@ -526,11 +530,10 @@ export class LevelSelect {
           <h3>当前章节：${escHtml(currentChapter.starTitle)}（章节难度：${currentChapter.chapter * 2}）</h3>
           <p><strong>章节难度说明</strong>：星辉冒险共分六章（白天 2 · 黑夜 4 · 泳池 6 · 浓雾 8 · 屋顶 10 · 雪原 12），章节推进与支线星级（1★ ~ 5★）越高，出怪节奏与高阶僵尸比例越紧凑。</p>
           <hr />
-          <p><strong>1. 简单模式</strong>：僵尸生命与攻速较柔和，适合熟悉融合配方与节奏。</p>
-          <p><strong>2. 普通模式</strong>（当前：${difficulty === 2 ? '使用中' : '可选'}）：标准平衡数值，贴合原版冒险推进体验。</p>
-          <p><strong>3. 困难模式</strong>：波次节奏加快、精英单位更早登场，建议充分利用双融合。</p>
-          <p><strong>4. 极难模式</strong>：高血量与高压尸潮并存，需要合理搭配经济与控场植物。</p>
-          <p><strong>5. 炼狱模式</strong>：极限强度挑战，面向成型究极融合阵容的高手玩家。</p>
+          ${DIFFICULTY_LEVELS.map(
+            (d) =>
+              `<p><strong>${d.level}. ${escHtml(d.name)}</strong>${d.isDefault ? '（默认）' : ''}${clampDifficulty(difficulty) === d.level ? ' <em>[当前选择]</em>' : ''}：${escHtml(d.summary)}。</p>`,
+          ).join('')}
         </div>
 
         <button class="ls-unity-foot-btn" id="ls-sub-back" style="left:21px;top:559px">
@@ -581,7 +584,7 @@ export class LevelSelect {
         ${this.renderStarButton(122.7, '返回冒险', 'data-tab="adventure"')}
         ${this.renderStarButton(736.8, '切换难度', 'id="ls-diff-cycle"')}
         <div class="ls-star-meta ls-star-ch-readout">星辉试炼 · 14 关</div>
-        <div class="ls-star-meta ls-star-diff-readout">${DIFF_LABELS[difficulty - 1] ?? '普通模式'}</div>
+        <div class="ls-star-meta ls-star-diff-readout">${formatDifficultyFull(difficulty)}</div>
       </div>
     `;
 
@@ -645,9 +648,9 @@ export class LevelSelect {
             <img src="assets/ui/seed_chooser_btn2.webp" data-base="assets/ui/seed_chooser_btn2.webp" data-hl="assets/ui/seed_chooser_btn2_glow.webp" alt="" />
             <span>返回菜单</span>
           </button>
-          <button class="ls-unity-foot-btn" id="ls-diff-cycle" style="left:898px;top:559px" title="点击切换难度">
+          <button class="ls-unity-foot-btn" id="ls-diff-cycle" style="left:898px;top:559px" title="点击切换难度 (1-5) · ${formatDifficultyFull(difficulty)}">
             <img src="assets/ui/seed_chooser_btn2.webp" data-base="assets/ui/seed_chooser_btn2.webp" data-hl="assets/ui/seed_chooser_btn2_glow.webp" alt="" />
-            <span>${DIFF_LABELS[difficulty - 1] ?? '普通模式'}</span>
+            <span>${formatDifficultyBadge(difficulty)}</span>
           </button>
         </div>
       `;
@@ -751,9 +754,9 @@ export class LevelSelect {
             </button>`
             : ''
         }
-        <button class="ls-unity-foot-btn" id="ls-diff-cycle" style="left:898px;top:559px" title="点击切换难度">
+        <button class="ls-unity-foot-btn" id="ls-diff-cycle" style="left:898px;top:559px" title="点击切换难度 (1-5) · ${formatDifficultyFull(difficulty)}">
           <img src="assets/ui/seed_chooser_btn2.webp" data-base="assets/ui/seed_chooser_btn2.webp" data-hl="assets/ui/seed_chooser_btn2_glow.webp" alt="" />
-          <span>${DIFF_LABELS[difficulty - 1] ?? '普通模式'}</span>
+          <span>${formatDifficultyBadge(difficulty)}</span>
         </button>
       </div>
     `;
@@ -914,9 +917,9 @@ export class LevelSelect {
             <img src="assets/ui/seed_chooser_btn2.webp" data-base="assets/ui/seed_chooser_btn2.webp" data-hl="assets/ui/seed_chooser_btn2_glow.webp" alt="" />
             <span>全部204关</span>
           </button>
-          <button class="ls-unity-foot-btn" id="ls-diff-cycle" style="left:904px;top:551px" title="点击切换难度">
+          <button class="ls-unity-foot-btn" id="ls-diff-cycle" style="left:904px;top:551px" title="点击切换难度 (1-5) · ${formatDifficultyFull(difficulty)}">
             <img src="assets/ui/seed_chooser_btn2.webp" data-base="assets/ui/seed_chooser_btn2.webp" data-hl="assets/ui/seed_chooser_btn2_glow.webp" alt="" />
-            <span>${DIFF_LABELS[difficulty - 1] ?? '普通模式'}</span>
+            <span>${formatDifficultyBadge(difficulty)}</span>
           </button>
         </div>
       `;
@@ -1208,9 +1211,9 @@ export class LevelSelect {
           <img src="assets/ui/seed_chooser_btn2.webp" data-base="assets/ui/seed_chooser_btn2.webp" data-hl="assets/ui/seed_chooser_btn2_glow.webp" alt="" />
           <span>下一页</span>
         </button>
-        <button class="ls-unity-foot-btn" id="ls-diff-cycle" style="left:898px;top:559px" title="点击切换难度">
+        <button class="ls-unity-foot-btn" id="ls-diff-cycle" style="left:898px;top:559px" title="点击切换难度 (1-5) · ${formatDifficultyFull(difficulty)}">
           <img src="assets/ui/seed_chooser_btn2.webp" data-base="assets/ui/seed_chooser_btn2.webp" data-hl="assets/ui/seed_chooser_btn2_glow.webp" alt="" />
-          <span>${DIFF_LABELS[difficulty - 1] ?? '普通模式'}</span>
+          <span>${formatDifficultyBadge(difficulty)}</span>
         </button>
       </div>
     `;
@@ -1380,9 +1383,9 @@ export class LevelSelect {
           <img src="assets/ui/seed_chooser_btn2.webp" data-base="assets/ui/seed_chooser_btn2.webp" data-hl="assets/ui/seed_chooser_btn2_glow.webp" alt="" />
           <span>返回菜单</span>
         </button>
-        <button class="ls-unity-foot-btn" id="ls-diff-cycle" style="left:898px;top:559px" title="点击切换难度">
+        <button class="ls-unity-foot-btn" id="ls-diff-cycle" style="left:898px;top:559px" title="点击切换难度 (1-5) · ${formatDifficultyFull(difficulty)}">
           <img src="assets/ui/seed_chooser_btn2.webp" data-base="assets/ui/seed_chooser_btn2.webp" data-hl="assets/ui/seed_chooser_btn2_glow.webp" alt="" />
-          <span>${DIFF_LABELS[difficulty - 1] ?? '普通模式'}</span>
+          <span>${formatDifficultyBadge(difficulty)}</span>
         </button>
       </div>
     `;
@@ -1429,9 +1432,9 @@ export class LevelSelect {
           <img src="assets/ui/seed_chooser_btn2.webp" data-base="assets/ui/seed_chooser_btn2.webp" data-hl="assets/ui/seed_chooser_btn2_glow.webp" alt="" />
           <span>返回挑战</span>
         </button>
-        <button class="ls-unity-foot-btn" id="ls-diff-cycle" style="left:898px;top:559px" title="点击切换难度">
+        <button class="ls-unity-foot-btn" id="ls-diff-cycle" style="left:898px;top:559px" title="点击切换难度 (1-5) · ${formatDifficultyFull(difficulty)}">
           <img src="assets/ui/seed_chooser_btn2.webp" data-base="assets/ui/seed_chooser_btn2.webp" data-hl="assets/ui/seed_chooser_btn2_glow.webp" alt="" />
-          <span>${DIFF_LABELS[difficulty - 1] ?? '普通模式'}</span>
+          <span>${formatDifficultyBadge(difficulty)}</span>
         </button>
       </div>
     `;
@@ -1455,7 +1458,7 @@ export class LevelSelect {
       });
     });
     this.uiRoot.querySelector('#ls-diff-cycle')?.addEventListener('click', () => {
-      const next = (saveManager.current.difficulty % 5) + 1;
+      const next = (clampDifficulty(saveManager.current.difficulty) % 5) + 1;
       saveManager.update({ difficulty: next });
       audio.playSfx('Tap', 0.75, 40);
       this.render();

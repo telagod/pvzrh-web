@@ -4,6 +4,7 @@ import { audio } from '../audio/AudioManager';
 import { ParticleSystem } from '../render/ParticleSystem';
 import { UnityAnimator } from '../render/UnityAnimator';
 import { UnityRigInstance } from '../render/UnityRigInstance';
+import { clampDifficulty, getDifficultyInfo } from '../save/difficulty';
 import { saveManager } from '../save/SaveManager';
 import type {
   ActiveBossHudInfo,
@@ -35,9 +36,6 @@ export const UNITY_ENTITY_SCALE = 0.62;
 
 const CAM_X_CHOOSER = 334;
 const CAM_X_BATTLE = 135;
-
-const DIFF_HP_SCALE = [0.85, 1.0, 1.15, 1.3, 1.5];
-const DIFF_COUNT_SCALE = [0.75, 1.0, 1.25, 1.55, 1.9];
 
 export interface TileSlotState {
   row: number;
@@ -1247,11 +1245,13 @@ export class BoardEngine {
     this.emitHud();
   }
 
-  /** Spawns a zombie immediately (used by Sandbox / E2E tests as well as waves). */
-  private getDiffIdx(): number {
-    return Math.max(0, Math.min(4, Math.floor(this.config.difficulty || 2) - 1));
+  /** Updates battle difficulty live (e.g. from SeedChooser or PauseMenu). */
+  setDifficulty(level: number): void {
+    this.config.difficulty = clampDifficulty(level);
+    this.emitHud();
   }
 
+  /** Spawns a zombie immediately (used by Sandbox / E2E tests as well as waves). */
   async spawnZombieAt(zombieId: number, row?: number, startX?: number): Promise<void> {
     if (this.destroyed) return;
     const zDef = assets.getZombie(zombieId) ?? assets.getZombie(0);
@@ -1302,7 +1302,7 @@ export class BoardEngine {
         ? 1
         : this.config.zombieHpMult *
           (this.config.modifiers?.zombieHpBonusMult ?? 1) *
-          DIFF_HP_SCALE[this.getDiffIdx()];
+          getDifficultyInfo(this.config.difficulty).hpScale;
     const armorScale = hpScale * (this.config.modifiers?.zombieArmorMult ?? 1);
     const maxHp = Math.round(zDef.hp * hpScale);
     const leaderExtra =
@@ -1492,8 +1492,9 @@ export class BoardEngine {
     for (const z of this.zombies) {
       if (z.removed || z.dying || z.hypnotized) continue;
       if (Math.hypot(z.x - wx, (z.y - 36) - sy) <= r) {
-        const dmg = z.beh.isBoss || z.beh.isLeader ? 5000 : 1000000;
-        this.damageZombie(z, dmg, { ignoreShield: true });
+        const isHeavy = z.beh.isBoss || z.beh.isLeader;
+        const dmg = isHeavy ? 5000 : 1000000;
+        this.damageZombie(z, dmg, { ignoreShield: true, trueDamage: !isHeavy });
       }
     }
     this.hammerActive = false;
@@ -2376,7 +2377,7 @@ export class BoardEngine {
         audio.playSfx('HugeWave', 0.9, 500);
       }
 
-      const diffMult = DIFF_COUNT_SCALE[this.getDiffIdx()];
+      const diffMult = getDifficultyInfo(this.config.difficulty).countScale;
       const roundScale = this.config.endless ? 1 + (this.endlessRound - 1) * 0.4 : 1;
       const totalWaveNum = (this.endlessRound - 1) * maxWaves + this.currentWave;
       this.currentWaveIsHuge = isHuge;
@@ -2385,12 +2386,10 @@ export class BoardEngine {
       if (totalWaveNum === 1 && !isHuge) {
         this.waveBudgetRemaining = this.config.difficulty >= 4 ? 75 : 50;
       } else if (totalWaveNum === 2 && !isHuge) {
-        this.waveBudgetRemaining = isLv1 ? 50 : Math.round(75 * diffMult);
+        this.waveBudgetRemaining = Math.round((isLv1 ? 50 : 75) * diffMult);
       } else {
         const rawBase = isLv1
-          ? totalWaveNum === 3
-            ? 100
-            : 120
+          ? Math.round((totalWaveNum === 3 ? 100 : 120) * diffMult)
           : Math.round((30 + totalWaveNum * 32 + Math.max(0, totalWaveNum - 5) * 14) * diffMult * roundScale);
         this.waveBudgetRemaining = Math.round(rawBase * (isHuge ? (isLv1 ? 1.85 : 2.1) : 1));
       }
@@ -2439,6 +2438,17 @@ export class BoardEngine {
             : 43;
         void this.spawnZombieAt(bossId);
         audio.playSfx('Siren', 0.85, 400);
+      }
+
+      // Official Difficulty 5 (炼狱): >= 4-flag levels spawn final-wave elite reinforcements
+      if (isFinal && this.config.difficulty >= 5 && maxWaves >= 40 && this.config.mode !== 'tower') {
+        const adv45Cleared = saveManager.current.unlockAll || saveManager.current.advLevel >= 45;
+        const reinforceIds = adv45Cleared ? [201, 204, 203] : [43];
+        for (const eid of reinforceIds) {
+          if (assets.getZombie(eid)) {
+            void this.spawnZombieAt(eid);
+          }
+        }
       }
       this.emitHud();
     }
@@ -2793,7 +2803,7 @@ export class BoardEngine {
             } else if (hit.beh.gargantuar || hit.beh.vehicle) {
               this.damageZombie(hit, this.computePlantDamage(400, hit.x, hit.y), { ignoreShield: true });
             } else {
-              this.damageZombie(hit, 99999, { ignoreShield: true });
+              this.damageZombie(hit, 99999, { ignoreShield: true, trueDamage: true });
             }
             p.chewTimer = 18;
             p.animator?.playOverlay('attack', 1);
@@ -2821,8 +2831,9 @@ export class BoardEngine {
         if (hit) {
           this.particleSys.emitWaterSplash(hit.x, hit.y);
           audio.playSfx('ZombieSplash', 0.9, 100);
-          const dmg = hit.beh.isBoss || hit.beh.isLeader ? this.computePlantDamage(600, hit.x, hit.y) : 99999;
-          this.damageZombie(hit, dmg, { ignoreShield: true });
+          const isHeavy = hit.beh.isBoss || hit.beh.isLeader;
+          const dmg = isHeavy ? this.computePlantDamage(600, hit.x, hit.y) : 99999;
+          this.damageZombie(hit, dmg, { ignoreShield: true, trueDamage: !isHeavy });
           this.destroyPlantInstance(p);
           continue;
         }
@@ -3230,6 +3241,7 @@ export class BoardEngine {
     amount: number,
     opts?: {
       ignoreShield?: boolean;
+      trueDamage?: boolean;
       chillDur?: number;
       freezeDur?: number;
       butterDur?: number;
@@ -3251,6 +3263,10 @@ export class BoardEngine {
     }
 
     let rem = amount;
+    const dr = getDifficultyInfo(this.config.difficulty).damageReduction;
+    if (dr > 0 && this.config.mode !== 'iz' && !z.hypnotized && !opts?.trueDamage) {
+      rem = Math.max(1, rem * (1 - dr));
+    }
     if (!opts?.ignoreShield && z.a2Hp > 0) {
       const absorbed = Math.min(z.a2Hp, rem);
       z.a2Hp -= absorbed;
@@ -3502,7 +3518,9 @@ export class BoardEngine {
                 : 'walk';
         z.animator?.playBase(walkClip, true);
         const zSpdMult = this.config.modifiers?.zombieSpeedBonusMult ?? 1;
-        const spd = z.beh.speedPxPerSec * this.config.zombieSpeedMult * zSpdMult * speedScale * (z.enraged ? 2.2 : 1);
+        const diffSpdMult = getDifficultyInfo(this.config.difficulty).speedMult;
+        const spd =
+          z.beh.speedPxPerSec * this.config.zombieSpeedMult * zSpdMult * diffSpdMult * speedScale * (z.enraged ? 2.2 : 1);
         if (tgt) {
           const tx = this.colCenterX(tgt.col);
           const ty = this.rowGroundY(tgt.row);
@@ -3553,7 +3571,9 @@ export class BoardEngine {
                   : 'walk';
         z.animator?.playBase(walkClip, true);
         const zSpdMult = this.config.modifiers?.zombieSpeedBonusMult ?? 1;
-        const spd = z.beh.speedPxPerSec * this.config.zombieSpeedMult * zSpdMult * speedScale * (z.enraged ? 2.2 : 1);
+        const diffSpdMult = this.config.mode === 'iz' ? 1 : getDifficultyInfo(this.config.difficulty).speedMult;
+        const spd =
+          z.beh.speedPxPerSec * this.config.zombieSpeedMult * zSpdMult * diffSpdMult * speedScale * (z.enraged ? 2.2 : 1);
         z.x -= spd * dt;
         z.container.position.set(z.x, z.y);
 
@@ -4095,6 +4115,7 @@ export class BoardEngine {
     return {
       phase: this.phase,
       mode: this.config.mode,
+      difficulty: clampDifficulty(this.config.difficulty),
       sun: Math.round(this.sun),
       infiniteSun: Boolean(this.config.infiniteSun),
       wave: this.currentWave,

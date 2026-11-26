@@ -2,6 +2,13 @@ import { Application, Container, Sprite } from 'pixi.js';
 import { assets } from '../assets/AssetLoader';
 import { audio } from '../audio/AudioManager';
 import { VIEW_H, VIEW_W } from '../engine/BoardEngine';
+import {
+  DIFFICULTY_LEVELS,
+  clampDifficulty,
+  formatDifficultyBadge,
+  formatDifficultyFull,
+  getDifficultyInfo,
+} from '../save/difficulty';
 import { saveManager } from '../save/SaveManager';
 import type { ScreenId } from '../types/game';
 import type { LevelTab } from './LevelSelect';
@@ -282,6 +289,10 @@ export class MainMenu {
         </button>
 
         <!-- Bottom-Right Stone Pills -->
+        <button class="mm-small-stone difficulty" id="mm-btn-diff" data-diff="${clampDifficulty(prof.difficulty)}" title="当前：${formatDifficultyFull(prof.difficulty)} — 点击切换难度 (1-5)">
+          <img src="assets/ui/buttonsmall.webp" alt="" />
+          <span>${formatDifficultyBadge(prof.difficulty)}</span>
+        </button>
         <button class="mm-small-stone update" id="mm-btn-update" title="查看 Web 移植版说明">
           <img src="assets/ui/buttonsmall.webp" alt="" />
           <span>更新公告</span>
@@ -352,6 +363,16 @@ export class MainMenu {
     });
     this.uiRoot.querySelector('#mm-btn-options')?.addEventListener('click', openOptions);
     this.uiRoot.querySelector('#mm-btn-settings')?.addEventListener('click', openOptions);
+    const diffBtn = this.uiRoot.querySelector<HTMLButtonElement>('#mm-btn-diff');
+    diffBtn?.addEventListener('click', () => {
+      const next = (clampDifficulty(saveManager.current.difficulty) % 5) + 1;
+      saveManager.update({ difficulty: next });
+      audio.playSfx('Tap', 0.8, 40);
+      diffBtn.dataset.diff = String(next);
+      diffBtn.title = `当前：${formatDifficultyFull(next)} — 点击切换难度 (1-5)`;
+      const sp = diffBtn.querySelector('span');
+      if (sp) sp.textContent = formatDifficultyBadge(next);
+    });
     this.uiRoot.querySelector('#mm-btn-help')?.addEventListener('click', () => {
       audio.playSfx('ButtonClick', 0.85, 50);
       this.openHelpModal();
@@ -470,6 +491,8 @@ export class MainMenu {
   private openOptionsModal(): void {
     this.closeModal();
     const p = saveManager.current;
+    const curDiff = clampDifficulty(p.difficulty);
+    const diffInfo = getDifficultyInfo(curDiff);
     const modal = document.createElement('div');
     modal.className = 'pvz-modal-backdrop';
     modal.innerHTML = `
@@ -485,10 +508,20 @@ export class MainMenu {
             <span>音效音量</span>
             <input id="o-sfx" type="range" min="0" max="100" value="${Math.round(p.soundVolume * 100)}" />
           </label>
-          <label class="opt-row">
-            <span>默认难度 (1-5)</span>
-            <input id="o-diff" type="range" min="1" max="5" step="1" value="${p.difficulty}" />
-          </label>
+          <div class="opt-diff-block">
+            <div class="opt-diff-hdr">
+              <span>游戏难度</span>
+              <span class="opt-diff-val" id="o-diff-val" data-diff="${curDiff}">${formatDifficultyFull(curDiff)}</span>
+            </div>
+            <input id="o-diff" type="range" min="1" max="5" step="1" value="${curDiff}" />
+            <div class="opt-diff-pills">
+              ${DIFFICULTY_LEVELS.map(
+                (d) =>
+                  `<button type="button" class="opt-diff-pill${d.level === curDiff ? ' active' : ''}${d.isDefault ? ' is-default' : ''}" data-set-diff="${d.level}" title="${this.escape(d.summary)}">${d.level} ${d.shortName}</button>`,
+              ).join('')}
+            </div>
+            <div class="opt-diff-desc" id="o-diff-desc">${this.escape(diffInfo.summary)}</div>
+          </div>
           <label class="opt-check">
             <input id="o-mute" type="checkbox" ${p.muted ? 'checked' : ''} />
             <span>静音所有声音</span>
@@ -515,17 +548,46 @@ export class MainMenu {
     this.uiRoot.appendChild(modal);
     this.modalEl = modal;
 
+    const diffSlider = modal.querySelector<HTMLInputElement>('#o-diff')!;
+    const diffValEl = modal.querySelector<HTMLElement>('#o-diff-val')!;
+    const diffDescEl = modal.querySelector<HTMLElement>('#o-diff-desc')!;
+    const diffPills = modal.querySelectorAll<HTMLButtonElement>('[data-set-diff]');
+
+    const applyDiffUi = (val: unknown) => {
+      const next = clampDifficulty(val);
+      const info = getDifficultyInfo(next);
+      diffSlider.value = String(next);
+      diffValEl.dataset.diff = String(next);
+      diffValEl.textContent = formatDifficultyFull(next);
+      diffDescEl.textContent = info.summary;
+      diffPills.forEach((btn) => {
+        btn.classList.toggle('active', Number(btn.dataset.setDiff) === next);
+      });
+      return next;
+    };
+
     const sync = () => {
+      const nextDiff = applyDiffUi(diffSlider.value);
       saveManager.update({
         musicVolume: Number(modal.querySelector<HTMLInputElement>('#o-bgm')!.value) / 100,
         soundVolume: Number(modal.querySelector<HTMLInputElement>('#o-sfx')!.value) / 100,
-        difficulty: Number(modal.querySelector<HTMLInputElement>('#o-diff')!.value),
+        difficulty: nextDiff,
         muted: modal.querySelector<HTMLInputElement>('#o-mute')!.checked,
         autoCollect: modal.querySelector<HTMLInputElement>('#o-auto')!.checked,
         unlockAll: modal.querySelector<HTMLInputElement>('#o-unlock')!.checked,
       });
     };
-    modal.querySelectorAll('input').forEach((el) => el.addEventListener('change', sync));
+    modal.querySelectorAll('input').forEach((el) => {
+      el.addEventListener('input', sync);
+      el.addEventListener('change', sync);
+    });
+    diffPills.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const next = applyDiffUi(btn.dataset.setDiff);
+        audio.playSfx('Tap', 0.75, 35);
+        saveManager.update({ difficulty: next });
+      });
+    });
 
     const bindTwoStepConfirm = (sel: string, confirmText: string, action: () => void) => {
       const btn = modal.querySelector<HTMLButtonElement>(sel);

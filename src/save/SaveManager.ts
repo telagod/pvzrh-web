@@ -10,6 +10,7 @@ import type {
   TravelRunState,
   UnlockedToolsState,
 } from '../types/game';
+import { clampDifficulty, DEFAULT_DIFFICULTY } from './difficulty';
 import {
   evaluatePlantUnlocked,
   REWARD_TRACKED_PLANT_IDS,
@@ -80,7 +81,7 @@ function makeDefaultProfile(name = '戴夫的邻居'): SaveProfile {
     bestSurvivalFlags: {},
     bestSurvivalRounds: {},
     lastDeck: [],
-    difficulty: 2,
+    difficulty: DEFAULT_DIFFICULTY,
     musicVolume: 0.55,
     soundVolume: 0.85,
     muted: false,
@@ -176,6 +177,7 @@ class SaveManager {
                   ? v.bestSurvivalRounds
                   : {},
               lastDeck: Array.isArray(v?.lastDeck) ? v.lastDeck : [],
+              difficulty: clampDifficulty(v?.difficulty),
               coins: typeof v?.coins === 'number' && Number.isFinite(v.coins) ? Math.max(0, v.coins) : def.coins,
               garden,
               travel,
@@ -243,7 +245,9 @@ class SaveManager {
   }
 
   update(patch: Partial<SaveProfile>): void {
-    Object.assign(this.current, patch);
+    const nextPatch =
+      patch.difficulty !== undefined ? { ...patch, difficulty: clampDifficulty(patch.difficulty) } : patch;
+    Object.assign(this.current, nextPatch);
     this._save();
     this._syncAudio();
   }
@@ -539,8 +543,8 @@ class SaveManager {
         prof.lastDeck = raw.lastDeck.map((x) => Number(x)).filter((x) => Number.isFinite(x));
       }
       const diff = Number(raw.difficulty ?? raw.theDifficulty);
-      if (Number.isFinite(diff) && diff >= 1 && diff <= 5) {
-        prof.difficulty = Math.floor(diff);
+      if (Number.isFinite(diff)) {
+        prof.difficulty = clampDifficulty(diff);
       }
       const mv = Number(raw.musicVolume);
       if (Number.isFinite(mv)) {

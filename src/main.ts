@@ -1,6 +1,7 @@
 import './styles.css';
 import { assets } from './assets/AssetLoader';
 import { BoardEngine } from './engine/BoardEngine';
+import { clampDifficulty } from './save/difficulty';
 import { saveManager } from './save/SaveManager';
 import type { BattleToolId, BoardConfig, DeckSlot, ScreenId } from './types/game';
 import type { Almanac } from './ui/Almanac';
@@ -335,6 +336,12 @@ class PvzWebApp {
         onDeckChange: (next) => {
           deck = next;
           board.setDeckSlots(next);
+        },
+        onDifficultyChange: (next) => {
+          const d = clampDifficulty(next);
+          saveManager.update({ difficulty: d });
+          config.difficulty = d;
+          board.setDifficulty(d);
         },
         onStartBattle: () => board.startBattle(),
         onExit: exitToOrigin,

@@ -440,6 +440,7 @@ export interface UnlockedToolsState {
 export interface HudSnapshot {
   phase: 'choosing' | 'intro' | 'playing' | 'paused' | 'won' | 'lost';
   mode: BoardConfig['mode'];
+  difficulty: number;
   sun: number;
   infiniteSun: boolean;
   wave: number;

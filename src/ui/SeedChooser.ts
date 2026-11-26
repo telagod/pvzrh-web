@@ -8,6 +8,13 @@ import {
   isNormalCard,
   NORMAL_CARD_IDS,
 } from '../save/plantUnlocks';
+import {
+  DIFFICULTY_LEVELS,
+  clampDifficulty,
+  formatDifficultyBadge,
+  formatDifficultyFull,
+  getDifficultyInfo,
+} from '../save/difficulty';
 import { saveManager } from '../save/SaveManager';
 import type { BoardConfig, DeckSlot, PlantDef } from '../types/game';
 import {
@@ -24,6 +31,7 @@ export interface SeedChooserDeps {
   roundLabel?: string;
   currentSun?: number;
   onDeckChange: (deck: DeckSlot[]) => void;
+  onDifficultyChange?: (diff: number) => void;
   onStartBattle: () => void;
   onExit: () => void;
 }
@@ -92,6 +100,9 @@ export class SeedChooser {
           ? '究极配方'
           : '本关配方';
 
+    const curDiff = clampDifficulty(config.difficulty);
+    const diffInfo = getDifficultyInfo(curDiff);
+
     this.host.innerHTML = `
       <div class="sc-shell">
         <div class="sc-top-bar">
@@ -102,6 +113,19 @@ export class SeedChooser {
             </div>
             <div class="sc-slots" id="sc-slots"></div>
           </div>
+          ${
+            config.mode === 'iz'
+              ? ''
+              : `<div class="sc-diff-picker" id="sc-diff-picker" data-diff="${curDiff}" title="${escHtml(formatDifficultyFull(curDiff) + '：' + diffInfo.summary)}">
+                  <div class="sc-diff-label" id="sc-diff-label">${formatDifficultyBadge(curDiff)}</div>
+                  <div class="sc-diff-btns">
+                    ${DIFFICULTY_LEVELS.map(
+                      (d) =>
+                        `<button type="button" class="sc-diff-btn${d.level === curDiff ? ' active' : ''}${d.isDefault ? ' is-default' : ''}" data-sc-diff="${d.level}" title="${escHtml(formatDifficultyFull(d.level) + '：' + d.summary)}">${d.level}</button>`,
+                    ).join('')}
+                  </div>
+                </div>`
+          }
           <button class="pvz-stone-btn sm" id="sc-exit">
             <img src="assets/ui/buttonsmall.webp" alt="" />
             <span>返回</span>
@@ -187,6 +211,24 @@ export class SeedChooser {
     this.host.querySelector('#sc-exit')?.addEventListener('click', () => {
       audio.playSfx('ButtonClick', 0.8, 40);
       this.deps.onExit();
+    });
+    const diffPicker = this.host.querySelector<HTMLElement>('#sc-diff-picker');
+    const diffLabel = this.host.querySelector<HTMLElement>('#sc-diff-label');
+    const diffBtns = this.host.querySelectorAll<HTMLButtonElement>('[data-sc-diff]');
+    diffBtns.forEach((b) => {
+      b.addEventListener('click', () => {
+        const next = clampDifficulty(b.dataset.scDiff);
+        const info = getDifficultyInfo(next);
+        audio.playSfx('Tap', 0.7, 35);
+        this.deps.config.difficulty = next;
+        this.deps.onDifficultyChange?.(next);
+        if (diffPicker) {
+          diffPicker.dataset.diff = String(next);
+          diffPicker.title = `${formatDifficultyFull(next)}：${info.summary}`;
+        }
+        if (diffLabel) diffLabel.textContent = formatDifficultyBadge(next);
+        diffBtns.forEach((btn) => btn.classList.toggle('active', Number(btn.dataset.scDiff) === next));
+      });
     });
     this.host.querySelectorAll<HTMLButtonElement>('[data-sc-tab]').forEach((b) => {
       b.addEventListener('click', () => {

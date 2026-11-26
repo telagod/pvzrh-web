@@ -1,6 +1,13 @@
 import { assets } from '../assets/AssetLoader';
 import { audio } from '../audio/AudioManager';
 import type { BoardEngine } from '../engine/BoardEngine';
+import {
+  DIFFICULTY_LEVELS,
+  clampDifficulty,
+  formatDifficultyBadge,
+  formatDifficultyFull,
+  getDifficultyInfo,
+} from '../save/difficulty';
 import { TOOL_UNLOCK_RULES } from '../save/plantUnlocks';
 import { saveManager } from '../save/SaveManager';
 import type { BattleToolId, BoardConfig, HudSnapshot, PlantDef } from '../types/game';
@@ -79,6 +86,7 @@ export class BattleHud {
   private bossArmorFillEl!: HTMLElement;
   private bossNumsEl!: HTMLElement;
   private modeBadgeEl!: HTMLElement;
+  private diffPillEl: HTMLButtonElement | null = null;
   private maLiangPad: MaLiangPad | null = null;
   private speedBtn!: HTMLButtonElement;
   private autoBtn!: HTMLButtonElement;
@@ -214,6 +222,11 @@ export class BattleHud {
         <div class="bh-bottom-bar">
           <div class="bh-mode-badge" id="bh-mode-badge" style="display:none"></div>
           <div class="bh-level-name">${escHtml(this.deps.config.title)}</div>
+          ${
+            isIz
+              ? ''
+              : `<button class="bh-diff-pill" id="bh-diff-pill" data-diff="${clampDifficulty(this.deps.config.difficulty)}" title="当前关卡难度（点击打开菜单可实时调节 1-5）">${formatDifficultyBadge(this.deps.config.difficulty)}</button>`
+          }
           <div class="bh-stats" id="bh-stats">击杀 0 · 融合 0</div>
           <div class="bh-flagmeter">
             <img class="fm-bg" src="assets/ui/flagmeter_empty.webp" alt="" />
@@ -268,6 +281,7 @@ export class BattleHud {
     this.bossArmorFillEl = this.host.querySelector('#bh-boss-armor-fill')!;
     this.bossNumsEl = this.host.querySelector('#bh-boss-nums')!;
     this.modeBadgeEl = this.host.querySelector('#bh-mode-badge')!;
+    this.diffPillEl = this.host.querySelector('#bh-diff-pill');
     this.speedBtn = this.host.querySelector('#bh-speed')!;
     this.autoBtn = this.host.querySelector('#bh-auto')!;
     this.muteBtn = this.host.querySelector('#bh-mute')!;
@@ -329,6 +343,10 @@ export class BattleHud {
       this.showTipsModal();
     });
     this.host.querySelector('#bh-pause')?.addEventListener('click', () => {
+      this.deps.board.setPaused(true);
+      this.showPauseModal();
+    });
+    this.diffPillEl?.addEventListener('click', () => {
       this.deps.board.setPaused(true);
       this.showPauseModal();
     });
@@ -572,6 +590,13 @@ export class BattleHud {
     const muted = audio.isMuted();
     this.muteBtn.textContent = muted ? '静音' : '声音';
     this.muteBtn.classList.toggle('muted', muted);
+    if (this.diffPillEl) {
+      const diffStr = String(snap.difficulty);
+      if (this.diffPillEl.dataset.diff !== diffStr) {
+        this.diffPillEl.dataset.diff = diffStr;
+        this.diffPillEl.textContent = formatDifficultyBadge(snap.difficulty);
+      }
+    }
 
     const pct = Math.round(snap.waveProgress * 100);
     this.waveFillEl.style.width = `${pct}%`;
@@ -792,6 +817,9 @@ export class BattleHud {
   private showPauseModal(): void {
     const p = saveManager.current;
     const isEndless = Boolean(this.deps.config.endless);
+    const isIz = this.deps.config.mode === 'iz';
+    const curDiff = clampDifficulty(this.deps.config.difficulty);
+    const diffInfo = getDifficultyInfo(curDiff);
     this.modalHost.innerHTML = `
       <div class="pvz-modal-backdrop">
         <div class="pvz-tomb-dialog pause">
@@ -806,6 +834,23 @@ export class BattleHud {
               <span>音效音量</span>
               <input id="pm-sfx" type="range" min="0" max="100" value="${Math.round(p.soundVolume * 100)}" />
             </label>
+            ${
+              isIz
+                ? ''
+                : `<div class="opt-diff-block compact">
+                    <div class="opt-diff-hdr">
+                      <span>关卡难度</span>
+                      <span class="opt-diff-val" id="pm-diff-val" data-diff="${curDiff}">${formatDifficultyFull(curDiff)}</span>
+                    </div>
+                    <div class="opt-diff-pills">
+                      ${DIFFICULTY_LEVELS.map(
+                        (d) =>
+                          `<button type="button" class="opt-diff-pill${d.level === curDiff ? ' active' : ''}${d.isDefault ? ' is-default' : ''}" data-pm-diff="${d.level}" title="${escHtml(d.summary)}">${d.level} ${d.shortName}</button>`,
+                      ).join('')}
+                    </div>
+                    <div class="opt-diff-desc" id="pm-diff-desc">${escHtml(diffInfo.summary)}</div>
+                  </div>`
+            }
             <button class="btn-wood-big" id="pm-almanac">查看图鉴</button>
             <button class="btn-wood-big" id="pm-restart">重新开始本关</button>
             ${isEndless ? '<button class="btn-wood-big gold" id="pm-settle">结算当前无尽记录</button>' : ''}
@@ -827,6 +872,25 @@ export class BattleHud {
     };
     this.modalHost.querySelector('#pm-bgm')?.addEventListener('input', syncAudio);
     this.modalHost.querySelector('#pm-sfx')?.addEventListener('input', syncAudio);
+    const pmDiffValEl = this.modalHost.querySelector<HTMLElement>('#pm-diff-val');
+    const pmDiffDescEl = this.modalHost.querySelector<HTMLElement>('#pm-diff-desc');
+    const pmDiffBtns = this.modalHost.querySelectorAll<HTMLButtonElement>('[data-pm-diff]');
+    pmDiffBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const next = clampDifficulty(btn.dataset.pmDiff);
+        const info = getDifficultyInfo(next);
+        audio.playSfx('Tap', 0.75, 35);
+        saveManager.update({ difficulty: next });
+        this.deps.config.difficulty = next;
+        this.deps.board.setDifficulty(next);
+        if (pmDiffValEl) {
+          pmDiffValEl.dataset.diff = String(next);
+          pmDiffValEl.textContent = formatDifficultyFull(next);
+        }
+        if (pmDiffDescEl) pmDiffDescEl.textContent = info.summary;
+        pmDiffBtns.forEach((b) => b.classList.toggle('active', Number(b.dataset.pmDiff) === next));
+      });
+    });
     this.modalHost.querySelector('#pm-almanac')?.addEventListener('click', () => {
       this.modalHost.innerHTML = '';
       this.deps.onOpenAlmanac();
