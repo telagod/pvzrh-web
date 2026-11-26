@@ -1,12 +1,14 @@
 import './styles.css';
 import { assets } from './assets/AssetLoader';
 import { BoardEngine } from './engine/BoardEngine';
+import { fusionSystem } from './engine/FusionSystem';
 import { clampDifficulty } from './save/difficulty';
 import { saveManager } from './save/SaveManager';
 import type { BattleToolId, BoardConfig, DeckSlot, ScreenId } from './types/game';
 import type { Almanac } from './ui/Almanac';
 import { BattleHud } from './ui/BattleHud';
 import type { LevelTab } from './ui/LevelSelect';
+import { LoadingOverlay } from './ui/LoadingOverlay';
 import { MainMenu } from './ui/MainMenu';
 import { SeedChooser } from './ui/SeedChooser';
 import { getTowerDefenseLevels } from './ui/towerCatalog';
@@ -25,6 +27,7 @@ class PvzWebApp {
   private readonly stageShell = document.getElementById('stage-shell')!;
   private readonly pixiRoot = document.getElementById('pixi-root')!;
   private readonly uiRoot = document.getElementById('ui-root')!;
+  private readonly loading = new LoadingOverlay(document.getElementById('loading-root')!);
 
   private screen: ScreenId = 'menu';
   private navToken = 0;
@@ -34,21 +37,24 @@ class PvzWebApp {
 
   async boot(): Promise<void> {
     this.bindProportionalUiScaler();
-    this.showBootLoader(0.08, '正在连接资源...');
+    this.exposeDebugHandle();
+    this.loading.show({
+      title: '植物大战僵尸 · 融合版 4.1',
+      detail: '正在连接资源...',
+      ratio: 0.02,
+      badge: '首次启动',
+    });
     try {
-      await assets.init((ratio, label) => this.showBootLoader(ratio, label));
-      this.openMainMenu();
-      this.exposeDebugHandle();
+      await assets.init((ratio, detail, countText) =>
+        this.loading.update(0.02 + ratio * 0.43, detail, countText),
+      );
+      await assets.preloadMainMenuAssets((ratio, detail, countText) =>
+        this.loading.update(0.45 + ratio * 0.45, detail, countText),
+      );
+      await this.openMainMenu({ managedLoader: true });
+      await this.loading.finish('欢迎回来！', this.uiRoot);
     } catch (err) {
-      this.uiRoot.innerHTML = `
-        <div class="boot-overlay">
-          <div class="boot-card error">
-            <h2>资源加载失败</h2>
-            <p>${(err as Error).message}</p>
-            <button class="btn-gold" onclick="location.reload()">重新加载</button>
-          </div>
-        </div>
-      `;
+      this.loading.showError('资源加载失败', (err as Error).message, () => location.reload());
     }
   }
 
@@ -99,22 +105,11 @@ class PvzWebApp {
     );
   }
 
-  private showBootLoader(ratio: number, label: string): void {
-    const pct = Math.max(5, Math.min(100, Math.round(ratio * 100)));
-    this.uiRoot.innerHTML = `
-      <div class="boot-overlay">
-        <div class="boot-card">
-          <img class="boot-sun" src="assets/bullets/sun.webp" alt="Sun" />
-          <h1>植物大战僵尸 · 融合版 4.1</h1>
-          <p>${label}</p>
-          <div class="boot-bar"><div class="boot-bar-fill" style="width:${pct}%"></div></div>
-        </div>
-      </div>
-    `;
-  }
-
-  private teardownCurrent(): void {
+  private teardownCurrent(keepLoader = false): void {
     this.navToken++;
+    if (!keepLoader) {
+      this.loading.hideImmediate();
+    }
     const prevScreen = this.screen;
     if (this.battleAlmanacOverlay) {
       this.battleAlmanacOverlay.destroy();
@@ -211,12 +206,21 @@ class PvzWebApp {
     }
   }
 
-  openMainMenu(): void {
-    this.teardownCurrent();
+  async openMainMenu(opts?: { managedLoader?: boolean }): Promise<void> {
+    this.teardownCurrent(Boolean(opts?.managedLoader));
     this.screen = 'menu';
+    const token = this.navToken;
+    const needBlockingLoad = !opts?.managedLoader && assets.hasUncachedMainMenuAssets();
+    if (needBlockingLoad) {
+      this.loading.show({
+        title: '正在返回主菜单...',
+        detail: '正在准备主菜单场景贴图...',
+        ratio: 0.08,
+      });
+    }
     const mm = new MainMenu(this.pixiRoot, this.uiRoot, {
-      onNavigate: (scr, opts) => {
-        if (scr === 'levels') this.openLevelSelect(opts?.tab ?? 'adventure');
+      onNavigate: (scr, navOpts) => {
+        if (scr === 'levels') this.openLevelSelect(navOpts?.tab ?? 'adventure');
         else if (scr === 'almanac') this.openAlmanac('index');
         else if (scr === 'garden') this.openGarden();
         else if (scr === 'travel') this.openTravel();
@@ -231,84 +235,188 @@ class PvzWebApp {
       onStartSandbox: () => this.startBattle(buildSandboxBoardConfig(0)),
     });
     this.activeCleanup = () => mm.destroy();
-    void mm.mount();
+    try {
+      await mm.mount((r, d, c) => {
+        if (token !== this.navToken) return;
+        if (opts?.managedLoader) {
+          this.loading.update(0.9 + r * 0.1, d, c);
+        } else if (needBlockingLoad) {
+          this.loading.update(0.08 + r * 0.92, d, c);
+        }
+      });
+      if (token !== this.navToken) return;
+      if (needBlockingLoad) {
+        await this.loading.finish('主菜单已就绪', this.uiRoot);
+      }
+    } catch (err) {
+      if (token === this.navToken && (opts?.managedLoader || needBlockingLoad)) {
+        this.loading.showError('主菜单加载失败', (err as Error).message, () => {
+          void this.openMainMenu();
+        });
+      }
+    }
   }
 
   openLevelSelect(tab: LevelTab = 'adventure'): void {
     this.teardownCurrent();
     this.screen = 'levels';
     const token = this.navToken;
-    void import('./ui/LevelSelect').then(({ LevelSelect }) => {
-      if (token !== this.navToken) return;
-      const ls = new LevelSelect(this.uiRoot, {
-        initialTab: tab,
-        onBack: () => this.openMainMenu(),
-        onSelectLevel: (cfg) => this.startBattle(cfg),
-      });
-      this.activeCleanup = () => ls.destroy();
-      ls.mount();
+    this.loading.show({
+      title: tab === 'iz' ? '正在打开解谜模式 · 我是僵尸' : '正在打开选关界面',
+      detail: tab === 'iz' ? '正在按需加载我是僵尸关卡库...' : '正在准备关卡列表...',
+      ratio: 0.15,
     });
+    void (async () => {
+      try {
+        const modPromise = import('./ui/LevelSelect');
+        const izPromise = tab === 'iz' ? assets.loadIzLevels() : Promise.resolve([]);
+        const [{ LevelSelect }] = await Promise.all([modPromise, izPromise]);
+        if (token !== this.navToken) return;
+        this.loading.update(0.8, '正在渲染选关界面...');
+        const ls = new LevelSelect(this.uiRoot, {
+          initialTab: tab,
+          onBack: () => void this.openMainMenu(),
+          onSelectLevel: (cfg) => this.startBattle(cfg),
+        });
+        this.activeCleanup = () => ls.destroy();
+        ls.mount();
+        await this.loading.finish('选关界面已就绪');
+      } catch (err) {
+        if (token === this.navToken) {
+          this.loading.showError('选关加载失败', (err as Error).message, () => this.openLevelSelect(tab));
+        }
+      }
+    })();
   }
 
   openAlmanac(initialView: 'index' | 'plants' = 'index'): void {
     this.teardownCurrent();
     this.screen = 'almanac';
     const token = this.navToken;
-    void import('./ui/Almanac').then(({ Almanac }) => {
-      if (token !== this.navToken) return;
-      const alm = new Almanac(this.uiRoot, () => this.openMainMenu(), undefined, initialView);
-      this.activeCleanup = () => alm.destroy();
-      void alm.mount();
+    this.loading.show({
+      title: '正在打开融合图鉴',
+      detail: '正在加载图鉴模块与展示台...',
+      ratio: 0.1,
     });
+    void (async () => {
+      try {
+        const { Almanac } = await import('./ui/Almanac');
+        if (token !== this.navToken) return;
+        this.loading.update(0.3, '正在加载图鉴展示台素材...');
+        const alm = new Almanac(this.uiRoot, () => void this.openMainMenu(), undefined, initialView);
+        this.activeCleanup = () => alm.destroy();
+        await alm.mount((r, d, c) => {
+          if (token === this.navToken) this.loading.update(0.3 + r * 0.7, d, c);
+        });
+        if (token !== this.navToken) return;
+        await this.loading.finish('图鉴已就绪');
+      } catch (err) {
+        if (token === this.navToken) {
+          this.loading.showError('图鉴加载失败', (err as Error).message, () => this.openAlmanac(initialView));
+        }
+      }
+    })();
   }
 
   openGarden(): void {
     this.teardownCurrent();
     this.screen = 'garden';
     const token = this.navToken;
-    void import('./ui/ZenGarden').then(({ ZenGarden }) => {
-      if (token !== this.navToken) return;
-      const zg = new ZenGarden(this.pixiRoot, this.uiRoot, {
-        onBack: () => this.openMainMenu(),
-      });
-      this.activeCleanup = () => zg.destroy();
-      void zg.mount();
+    this.loading.show({
+      title: '正在进入禅境花园',
+      detail: '正在加载温室模块...',
+      ratio: 0.08,
     });
+    void (async () => {
+      try {
+        const { ZenGarden } = await import('./ui/ZenGarden');
+        if (token !== this.navToken) return;
+        this.loading.update(0.22, '正在按需加载温室与盆栽动画...');
+        const zg = new ZenGarden(this.pixiRoot, this.uiRoot, {
+          onBack: () => void this.openMainMenu(),
+        });
+        this.activeCleanup = () => zg.destroy();
+        await zg.mount((r, d, c) => {
+          if (token === this.navToken) this.loading.update(0.22 + r * 0.78, d, c);
+        });
+        if (token !== this.navToken) return;
+        await this.loading.finish('禅境花园已就绪', this.uiRoot);
+      } catch (err) {
+        if (token === this.navToken) {
+          this.loading.showError('禅境花园加载失败', (err as Error).message, () => this.openGarden());
+        }
+      }
+    })();
   }
 
   openTravel(): void {
     this.teardownCurrent();
     this.screen = 'travel';
     const token = this.navToken;
-    void import('./ui/TravelMode').then(({ TravelMode }) => {
-      if (token !== this.navToken) return;
-      const trv = new TravelMode(this.uiRoot, {
-        onBack: () => this.openMainMenu(),
-        onStartBattle: (cfg) => this.startBattle(cfg),
-      });
-      this.activeCleanup = () => trv.destroy();
-      trv.mount();
+    this.loading.show({
+      title: '正在前往旅行模式',
+      detail: '正在加载旅行模式与词条数据...',
+      ratio: 0.25,
     });
+    void (async () => {
+      try {
+        const { TravelMode } = await import('./ui/TravelMode');
+        if (token !== this.navToken) return;
+        this.loading.update(0.85, '正在进入旅行大厅...');
+        const trv = new TravelMode(this.uiRoot, {
+          onBack: () => void this.openMainMenu(),
+          onStartBattle: (cfg) => this.startBattle(cfg),
+        });
+        this.activeCleanup = () => trv.destroy();
+        trv.mount();
+        await this.loading.finish('旅行模式已就绪');
+      } catch (err) {
+        if (token === this.navToken) {
+          this.loading.showError('旅行模式加载失败', (err as Error).message, () => this.openTravel());
+        }
+      }
+    })();
   }
 
   openAbyss(): void {
     this.teardownCurrent();
     this.screen = 'abyss';
     const token = this.navToken;
-    void import('./ui/AbyssMode').then(({ AbyssMode }) => {
-      if (token !== this.navToken) return;
-      const aby = new AbyssMode(this.uiRoot, {
-        onBack: () => this.openMainMenu(),
-        onStartBattle: (cfg) => this.startBattle(cfg),
-      });
-      this.activeCleanup = () => aby.destroy();
-      aby.mount();
+    this.loading.show({
+      title: '正在前往冒险秘境',
+      detail: '正在加载秘境仓库与关卡配置...',
+      ratio: 0.25,
     });
+    void (async () => {
+      try {
+        const { AbyssMode } = await import('./ui/AbyssMode');
+        if (token !== this.navToken) return;
+        this.loading.update(0.85, '正在进入秘境准备室...');
+        const aby = new AbyssMode(this.uiRoot, {
+          onBack: () => void this.openMainMenu(),
+          onStartBattle: (cfg) => this.startBattle(cfg),
+        });
+        this.activeCleanup = () => aby.destroy();
+        aby.mount();
+        await this.loading.finish('冒险秘境已就绪');
+      } catch (err) {
+        if (token === this.navToken) {
+          this.loading.showError('冒险秘境加载失败', (err as Error).message, () => this.openAbyss());
+        }
+      }
+    })();
   }
 
   startBattle(config: BoardConfig, opts?: { launchedFromMenu?: boolean }): void {
     this.teardownCurrent();
     this.screen = 'battle';
+    const token = this.navToken;
+
+    this.loading.show({
+      title: config.title,
+      detail: '正在按需加载本关场景与素材...',
+      ratio: 0.03,
+    });
 
     const seedContainer = document.createElement('div');
     const hudContainer = document.createElement('div');
@@ -320,10 +428,38 @@ class PvzWebApp {
     let chooser: SeedChooser | null = null;
 
     const exitToOrigin = () => {
-      if (opts?.launchedFromMenu) this.openMainMenu();
+      if (opts?.launchedFromMenu) void this.openMainMenu();
       else if (config.mode === 'travel') this.openTravel();
       else if (config.mode === 'abyss') this.openAbyss();
       else this.openLevelSelect(this.resolveOriginTab(config));
+    };
+
+    const handleStartBattle = async () => {
+      const deckIds = deck.map((s) => s.plantId);
+      const baseIds = Array.from(new Set([...deckIds, ...config.prePlants.map((p) => p.thePlantType)]));
+      const fusionResults = new Set<number>();
+      for (let i = 0; i < baseIds.length; i++) {
+        for (let j = i; j < baseIds.length; j++) {
+          const resId = fusionSystem.getFusionResult(baseIds[i], baseIds[j]);
+          if (resId !== null) fusionResults.add(resId);
+        }
+      }
+      const uncached = assets.getUncachedPlantRigIds([...deckIds, ...fusionResults]);
+      if (uncached.length > 0) {
+        this.loading.show({
+          title: config.title,
+          detail: '正在加载已选植物与融合动画...',
+          ratio: 0.06,
+          countText: `0 / ${uncached.length}`,
+        });
+        await assets.preloadPlantRigs(uncached, (r, d, c) => {
+          if (token === this.navToken) this.loading.update(0.06 + r * 0.94, d, c);
+        });
+        if (token !== this.navToken) return;
+        await this.loading.finish('植物就绪，准备开战！');
+      }
+      if (token !== this.navToken) return;
+      board.startBattle();
     };
 
     const mountChooser = (roundLabel?: string, currentSun?: number) => {
@@ -343,7 +479,7 @@ class PvzWebApp {
           config.difficulty = d;
           board.setDifficulty(d);
         },
-        onStartBattle: () => board.startBattle(),
+        onStartBattle: handleStartBattle,
         onExit: exitToOrigin,
       });
       chooser.mount();
@@ -484,16 +620,13 @@ class PvzWebApp {
         else if (config.mode === 'abyss') this.openAbyss();
         else this.openLevelSelect(this.resolveOriginTab(config));
       },
-      onExitToMenu: () => this.openMainMenu(),
+      onExitToMenu: () => void this.openMainMenu(),
     });
     hud.mount();
 
     const skipChooser = Boolean(
       config.conveyorMode || config.maliangMode || config.mode === 'iz' || config.mode === 'vasebreaker',
     );
-    if (!skipChooser) {
-      mountChooser();
-    }
 
     this.activeCleanup = () => {
       chooser?.destroy();
@@ -502,7 +635,22 @@ class PvzWebApp {
       this.uiRoot.innerHTML = '';
     };
 
-    void board.init(deck, skipChooser);
+    void (async () => {
+      try {
+        await board.init(deck, skipChooser, (r, d, c) => {
+          if (token === this.navToken) this.loading.update(0.03 + r * 0.97, d, c);
+        });
+        if (token !== this.navToken) return;
+        if (!skipChooser) {
+          mountChooser();
+        }
+        await this.loading.finish('关卡素材已就绪', this.uiRoot);
+      } catch (err) {
+        if (token === this.navToken) {
+          this.loading.showError('关卡加载失败', (err as Error).message, () => this.startBattle(config, opts));
+        }
+      }
+    })();
   }
 
   private exposeDebugHandle(): void {
@@ -517,6 +665,7 @@ class PvzWebApp {
       getScreen: () => this.screen,
       getMetrics: () => ({
         screen: this.screen,
+        loading: this.loading.getState(),
         board: this.activeBoard?.getDebugMetrics() ?? null,
         hud: this.activeBoard?.getSnapshot() ?? null,
       }),

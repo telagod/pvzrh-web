@@ -1,5 +1,5 @@
 import { Application, Container, Sprite } from 'pixi.js';
-import { assets } from '../assets/AssetLoader';
+import { assets, type AssetProgressCb } from '../assets/AssetLoader';
 import { audio } from '../audio/AudioManager';
 import { VIEW_H, VIEW_W } from '../engine/BoardEngine';
 import {
@@ -51,10 +51,11 @@ export class MainMenu {
     this.deps = deps;
   }
 
-  async mount(): Promise<void> {
-    this.renderDom();
-    void audio.playBgm('MainMenu');
+  async mount(onProgress?: AssetProgressCb): Promise<void> {
+    await assets.preloadMainMenuAssets((r, d, c) => onProgress?.(r * 0.85, d, c));
+    if (this.destroyed) return;
 
+    onProgress?.(0.9, '正在初始化主菜单画布...');
     const app = new Application();
     await app.init({
       width: VIEW_W,
@@ -208,6 +209,11 @@ export class MainMenu {
         this.squalourSprite.y = 211.5 + 5.9 * t01 - jumpLift;
       }
     });
+
+    this.renderDom();
+    app.render();
+    void audio.playBgm('MainMenu');
+    onProgress?.(1, '主菜单已就绪');
   }
 
   private resolveClassicAdventureBadge(): { advLevel: number; bigLv: number; smallLv: number } {

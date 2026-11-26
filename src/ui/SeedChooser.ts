@@ -32,7 +32,7 @@ export interface SeedChooserDeps {
   currentSun?: number;
   onDeckChange: (deck: DeckSlot[]) => void;
   onDifficultyChange?: (diff: number) => void;
-  onStartBattle: () => void;
+  onStartBattle: () => void | Promise<void>;
   onExit: () => void;
 }
 
@@ -53,6 +53,7 @@ export class SeedChooser {
   private synergyHint = '';
   private highlightedIds = new Set<number>();
   private overlayMode: 'none' | 'zombies' | 'tips' = 'none';
+  private starting = false;
 
   constructor(host: HTMLElement, deps: SeedChooserDeps) {
     this.host = host;
@@ -278,10 +279,13 @@ export class SeedChooser {
       this.render();
     });
     this.host.querySelector('#sc-start')?.addEventListener('click', () => {
-      if (this.selected.length === 0) return;
+      if (this.selected.length === 0 || this.starting) return;
+      this.starting = true;
       saveManager.setLastDeck(this.selected.map((s) => s.plantId));
       audio.playSfx('GraveButton', 0.9, 60);
-      this.deps.onStartBattle();
+      Promise.resolve(this.deps.onStartBattle()).finally(() => {
+        this.starting = false;
+      });
     });
   }
 

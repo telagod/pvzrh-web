@@ -355,6 +355,7 @@ export class BattleHud {
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
+    if (document.body.dataset.loading === '1') return;
     const tag = (e.target as HTMLElement | null)?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 

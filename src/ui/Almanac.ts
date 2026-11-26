@@ -1,5 +1,5 @@
 import { Application, Graphics, Sprite } from 'pixi.js';
-import { assets } from '../assets/AssetLoader';
+import { assets, type AssetProgressCb } from '../assets/AssetLoader';
 import { audio } from '../audio/AudioManager';
 import { fusionSystem } from '../engine/FusionSystem';
 import { UnityAnimator } from '../render/UnityAnimator';
@@ -64,15 +64,11 @@ export class Almanac {
     }
   }
 
-  async mount(): Promise<void> {
-    await Promise.allSettled([
-      assets.loadTexture('assets/ui/ground_day.webp'),
-      assets.loadTexture('assets/ui/ground_night.webp'),
-      assets.loadTexture('assets/ui/ground_pool.webp'),
-      assets.loadTexture('assets/ui/ground_roof.webp'),
-    ]);
+  async mount(onProgress?: AssetProgressCb): Promise<void> {
+    await assets.preloadAlmanacAssets((r, d, c) => onProgress?.(r * 0.9, d, c));
     if (this.destroyed) return;
     await this.enterView(this.view);
+    onProgress?.(1, '图鉴已就绪');
   }
 
   private destroyPreview(): void {

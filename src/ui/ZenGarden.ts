@@ -1,5 +1,5 @@
 import { Application, Container, Graphics, Sprite } from 'pixi.js';
-import { assets } from '../assets/AssetLoader';
+import { assets, type AssetProgressCb } from '../assets/AssetLoader';
 import { audio } from '../audio/AudioManager';
 import { VIEW_H, VIEW_W } from '../engine/BoardEngine';
 import { UnityAnimator } from '../render/UnityAnimator';
@@ -97,10 +97,17 @@ export class ZenGarden {
     this.deps = deps;
   }
 
-  async mount(): Promise<void> {
-    void audio.playBgm('Garden');
-    this.renderDom();
+  async mount(onProgress?: AssetProgressCb): Promise<void> {
+    const gardenState = saveManager.current.garden;
+    const activeSceneTex = SCENE_META[gardenState.scene].tex;
+    const plantIds = gardenState.plants.map((p) => p.plantId);
 
+    await assets.preloadZenGardenAssets(activeSceneTex, plantIds, (r, d, c) =>
+      onProgress?.(r * 0.85, d, c),
+    );
+    if (this.destroyed) return;
+
+    onProgress?.(0.9, '正在初始化温室画布...');
     const app = new Application();
     await app.init({
       width: VIEW_W,
@@ -123,30 +130,24 @@ export class ZenGarden {
     app.canvas.style.display = 'block';
     this.pixiHost.appendChild(app.canvas);
 
-    await Promise.allSettled([
-      assets.loadTexture('assets/ui/modes/garden_new.webp'),
-      assets.loadTexture('assets/ui/modes/garden_morning.webp'),
-      assets.loadTexture('assets/ui/modes/garden_night.webp'),
-      assets.loadTexture('assets/ui/modes/garden_mushroom.webp'),
-      assets.loadTexture('assets/ui/modes/gold_pot.webp'),
-      assets.loadTexture('assets/ui/modes/silver_pot.webp'),
-    ]);
-    if (this.destroyed) return;
-
-    const bg = new Sprite(assets.getCachedTexture(SCENE_META[saveManager.current.garden.scene].tex));
+    const bg = new Sprite(assets.getCachedTexture(activeSceneTex));
     bg.width = VIEW_W;
     bg.height = VIEW_H;
     this.bgSprite = bg;
 
     app.stage.addChild(bg, this.slotLayer);
     await this.syncPixiPlants();
+    if (this.destroyed) return;
     this.seedInitialCoinIfHappy();
     this.renderDom();
+    app.render();
+    void audio.playBgm('Garden');
 
     app.ticker.add((ticker) => {
       const dt = Math.min(0.05, ticker.deltaMS / 1000);
       this.tick(dt);
     });
+    onProgress?.(1, '禅境花园已就绪');
   }
 
   private tick(dt: number): void {
@@ -221,8 +222,18 @@ export class ZenGarden {
     const g = saveManager.current.garden;
 
     if (this.bgSprite) {
-      const tex = assets.getCachedTexture(SCENE_META[g.scene].tex);
-      if (tex) this.bgSprite.texture = tex;
+      const targetScene = g.scene;
+      const targetTex = SCENE_META[targetScene].tex;
+      const tex = assets.getCachedTexture(targetTex);
+      if (tex) {
+        this.bgSprite.texture = tex;
+      } else {
+        void assets.loadTexture(targetTex).then((loaded) => {
+          if (loaded && !this.destroyed && this.bgSprite && saveManager.current.garden.scene === targetScene) {
+            this.bgSprite.texture = loaded;
+          }
+        });
+      }
     }
 
     const activeUids = new Set(g.plants.map((p) => p.uid));

@@ -1,10 +1,11 @@
 import { Application, Container, Graphics, Sprite, Text, TextStyle } from 'pixi.js';
-import { assets } from '../assets/AssetLoader';
+import { assets, type AssetProgressCb } from '../assets/AssetLoader';
 import { audio } from '../audio/AudioManager';
 import { ParticleSystem } from '../render/ParticleSystem';
 import { UnityAnimator } from '../render/UnityAnimator';
 import { UnityRigInstance } from '../render/UnityRigInstance';
 import { clampDifficulty, getDifficultyInfo } from '../save/difficulty';
+import { NORMAL_CARD_IDS } from '../save/plantUnlocks';
 import { saveManager } from '../save/SaveManager';
 import type {
   ActiveBossHudInfo,
@@ -369,8 +370,13 @@ export class BoardEngine {
     this.fusionPreviewLabel.visible = false;
   }
 
-  async init(initialDeck: (number | DeckSlot)[], skipSeedChooser = false): Promise<void> {
+  async init(
+    initialDeck: (number | DeckSlot)[],
+    skipSeedChooser = false,
+    onProgress?: AssetProgressCb,
+  ): Promise<void> {
     if (this.destroyed) return;
+    onProgress?.(0.04, '正在初始化战斗画布...');
 
     const app = new Application();
     await app.init({
@@ -416,8 +422,9 @@ export class BoardEngine {
       this.fusionPreviewLabel,
     );
 
+    const deckIds = initialDeck.map((d) => (typeof d === 'number' ? d : d.plantId));
     const preloadPlants = new Set<number>([
-      ...initialDeck.map((d) => (typeof d === 'number' ? d : d.plantId)),
+      ...deckIds,
       ...this.conveyorPool,
       ...this.config.prePlants.map((p) => p.thePlantType),
       ...(this.config.izConfig?.plants.map((p) => p.thePlantType) ?? []),
@@ -436,37 +443,29 @@ export class BoardEngine {
         .map((v) => v.zombieId)
         .filter((id): id is number => id !== undefined) ?? []),
     ]);
-    await Promise.all([
-      assets.preloadBattleAssets(
-        [...preloadPlants],
-        [...preloadZombies],
-        this.config.scene.bg,
-      ),
-      this.config.mode === 'iz' ? assets.loadTexture('assets/ui/brain.webp') : Promise.resolve(null),
-      ...(this.config.vasebreakerConfig
-        ? [
-            assets.loadTexture('assets/ui/modes/scary_pot_0.webp'),
-            assets.loadTexture('assets/ui/modes/scary_pot_3.webp'),
-            assets.loadTexture('assets/ui/modes/scary_pot_4.webp'),
-          ]
-        : []),
-      ...(needGraves
-        ? [
-            assets.loadTexture('assets/ui/modes/grave_0.webp'),
-            assets.loadTexture('assets/ui/modes/grave_1.webp'),
-            assets.loadTexture('assets/ui/modes/grave_2.webp'),
-            assets.loadTexture('assets/ui/modes/grave_3.webp'),
-          ]
-        : []),
-      ...(this.config.towerConfig
-        ? [
-            assets.loadTexture('assets/ui/modes/tower_bush.webp'),
-            assets.loadTexture('assets/ui/modes/tower_tree.webp'),
-          ]
-        : []),
-    ]);
+    const visiblePortraitPlantIds = !skipSeedChooser
+      ? Array.from(
+          new Set<number>([
+            ...deckIds,
+            ...(this.config.presetCards ?? []),
+            ...NORMAL_CARD_IDS.filter((id) => saveManager.isPlantUnlocked(id, this.config)).slice(0, 16),
+          ]),
+        )
+      : [];
+
+    await assets.preloadLevelEntryAssets({
+      config: this.config,
+      initialPlantIds: [...preloadPlants],
+      zombieIds: [...preloadZombies],
+      skipSeedChooser,
+      needGraves,
+      visiblePortraitPlantIds,
+      unlockedTools: this.unlockedTools,
+      onProgress: (r, detail, countText) => onProgress?.(0.08 + r * 0.82, detail, countText),
+    });
     if (this.destroyed) return;
 
+    onProgress?.(0.92, '正在布置草坪与场景道具...');
     this.buildBackgroundAndFog();
     if (this.config.towerConfig) {
       this.buildTowerPathOverlay();
@@ -499,13 +498,16 @@ export class BoardEngine {
       }
       void audio.playBgm(this.config.scene.bgm || 'Day');
     } else {
+      onProgress?.(0.96, '正在布置预览僵尸...');
       this.phase = 'choosing';
       this.camX = CAM_X_CHOOSER;
       this.targetCamX = CAM_X_CHOOSER;
       await this.spawnPreviewZombies();
       void audio.playBgm(this.config.scene.bgm || 'Day');
     }
+    if (this.destroyed) return;
     this.worldContainer.position.set(-this.camX, 0);
+    app.render();
 
     app.ticker.add((ticker) => {
       const dt = Math.min(0.05, ticker.deltaMS / 1000);
@@ -513,6 +515,7 @@ export class BoardEngine {
     });
 
     this.emitHud();
+    onProgress?.(1, '关卡加载完成');
   }
 
   private buildBackgroundAndFog(): void {
@@ -1851,6 +1854,10 @@ export class BoardEngine {
       this.particleSys.emitFusionBurst(x, y);
       audio.playSfx(['PlantGrow', 'Chime'], 0.9, 60);
       this.callbacks.onFusionToast(parentADef, parentBDef, resultDef);
+      for (const s of this.deckSlots) {
+        const nextId = fusionSystem.getFusionResult(action.resultId, s.plantId);
+        if (nextId !== null) void assets.loadPlantRig(nextId);
+      }
       return true;
     }
 
