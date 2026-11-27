@@ -2,6 +2,7 @@ import { Application, Container, Graphics, Sprite, Text, TextStyle } from 'pixi.
 import { assets, type AssetProgressCb } from '../assets/AssetLoader';
 import { audio } from '../audio/AudioManager';
 import { ParticleSystem } from '../render/ParticleSystem';
+import { attachPixiRecovery } from '../render/pixiRecovery';
 import { UnityAnimator } from '../render/UnityAnimator';
 import { UnityRigInstance } from '../render/UnityRigInstance';
 import { clampDifficulty, getDifficultyInfo } from '../save/difficulty';
@@ -197,6 +198,7 @@ export class BoardEngine {
   private readonly hostEl: HTMLElement;
 
   private app: Application | null = null;
+  private cleanupRecovery: (() => void) | null = null;
   private worldContainer = new Container();
   private bgLayer = new Container();
   private tileDecalLayer = new Container();
@@ -386,6 +388,7 @@ export class BoardEngine {
       antialias: true,
       preference: 'webgl',
       autoDensity: true,
+      gcActive: false,
       resolution: Math.min(window.devicePixelRatio || 1, 2),
     });
 
@@ -395,6 +398,7 @@ export class BoardEngine {
     }
 
     this.app = app;
+    this.cleanupRecovery = attachPixiRecovery(app);
     app.canvas.style.width = '100%';
     app.canvas.style.height = '100%';
     app.canvas.style.display = 'block';
@@ -1049,12 +1053,7 @@ export class BoardEngine {
 
   setDeckSlots(slots: DeckSlot[]): void {
     this.deckSlots = slots.map((s) => ({ ...s }));
-    const cdMult = this.config.modifiers?.cardCdMult ?? 1;
-    this.cardCooldowns = this.deckSlots.map((s) => {
-      if (this.config.zeroCooldown) return 0;
-      const p = assets.getPlant(s.plantId);
-      return p && p.cd >= 15 ? Math.min(12, p.cd * 0.5 * cdMult) : 0;
-    });
+    this.cardCooldowns = this.deckSlots.map(() => 0);
     for (const s of this.deckSlots) {
       void assets.loadPlantRig(s.plantId);
     }
@@ -1068,6 +1067,7 @@ export class BoardEngine {
     this.targetCamX = CAM_X_BATTLE;
     this.introTimer = 0;
     this.waveTimer = this.config.firstWaveDelay;
+    this.cardCooldowns.fill(0);
     audio.playSfx('ReadySetPlant', 0.9, 100);
     this.emitHud();
   }
@@ -4227,6 +4227,8 @@ export class BoardEngine {
     this.vases.length = 0;
     this.bullets.length = 0;
     this.particleSys.clear();
+    this.cleanupRecovery?.();
+    this.cleanupRecovery = null;
     if (this.app) {
       this.app.destroy(
         { removeView: true },

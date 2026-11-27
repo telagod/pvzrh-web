@@ -3193,29 +3193,6 @@ button:disabled {
   z-index: 3;
 }
 
-.bh-card-cd-time {
-  position: absolute;
-  left: 50%;
-  top: 43%;
-  transform: translate(-50%, -50%);
-  padding: 1px 3px;
-  border-radius: 4px;
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(254, 240, 138, 0.35);
-  color: #fef08a;
-  font-size: 10px;
-  font-weight: 900;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 2px #000;
-  pointer-events: none;
-  z-index: 4;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
-}
-
 .bh-card-flash {
   position: absolute;
   inset: 0;

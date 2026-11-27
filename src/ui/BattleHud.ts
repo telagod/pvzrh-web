@@ -48,7 +48,6 @@ export class BattleHud {
   private cardEls: {
     btn: HTMLButtonElement;
     cdEl: HTMLElement;
-    cdTimeEl: HTMLElement;
     wasCooling: boolean;
     plantId: number;
   }[] = [];
@@ -439,14 +438,9 @@ export class BattleHud {
           const pct = Math.max(0, Math.min(100, (c.cooldownLeft / c.cooldownTotal) * 100));
           item.cdEl.style.height = `${pct.toFixed(1)}%`;
           item.cdEl.style.display = 'block';
-          item.cdTimeEl.textContent =
-            c.cooldownLeft >= 10 ? `${Math.ceil(c.cooldownLeft)}s` : `${c.cooldownLeft.toFixed(1)}s`;
-          item.cdTimeEl.style.display = 'flex';
         } else {
           item.cdEl.style.height = '0%';
           item.cdEl.style.display = 'none';
-          item.cdTimeEl.textContent = '';
-          item.cdTimeEl.style.display = 'none';
           if (item.wasCooling) {
             item.btn.classList.remove('cd-ready-flash');
             void item.btn.offsetWidth;
@@ -728,7 +722,6 @@ export class BattleHud {
         <span class="pkt-cost">${c.cost}</span>
         <div class="bh-card-shadow"></div>
         <div class="bh-card-cd"></div>
-        <span class="bh-card-cd-time"></span>
         <div class="bh-card-flash"></div>
       `;
       btn.addEventListener('click', () => this.deps.board.setSelectedCard(idx));
@@ -736,7 +729,6 @@ export class BattleHud {
       this.cardEls.push({
         btn,
         cdEl: btn.querySelector('.bh-card-cd')!,
-        cdTimeEl: btn.querySelector('.bh-card-cd-time')!,
         wasCooling: c.cooldownLeft > 0.05 && c.cooldownTotal > 0,
         plantId: c.plantId,
       });

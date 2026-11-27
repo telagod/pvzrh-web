@@ -2,6 +2,7 @@ import { Application, Graphics, Sprite } from 'pixi.js';
 import { assets, type AssetProgressCb } from '../assets/AssetLoader';
 import { audio } from '../audio/AudioManager';
 import { fusionSystem } from '../engine/FusionSystem';
+import { attachPixiRecovery } from '../render/pixiRecovery';
 import { UnityAnimator } from '../render/UnityAnimator';
 import { UnityRigInstance } from '../render/UnityRigInstance';
 import { getPlantUnlockHint } from '../save/plantUnlocks';
@@ -43,6 +44,7 @@ export class Almanac {
 
   private previewHost: HTMLElement | null = null;
   private previewApp: Application | null = null;
+  private cleanupRecovery: (() => void) | null = null;
   private bgGroundSprite: Sprite | null = null;
   private curRig: UnityRigInstance | null = null;
   private curAnimator: UnityAnimator | null = null;
@@ -76,6 +78,8 @@ export class Almanac {
     this.curRig = null;
     this.curAnimator = null;
     this.bgGroundSprite = null;
+    this.cleanupRecovery?.();
+    this.cleanupRecovery = null;
     if (this.previewApp) {
       this.previewApp.destroy(
         { removeView: true },
@@ -268,6 +272,7 @@ export class Almanac {
       antialias: true,
       preference: 'webgl',
       autoDensity: true,
+      gcActive: false,
       resolution: Math.min(window.devicePixelRatio || 1, 2),
     });
     if (this.destroyed) {
@@ -275,6 +280,7 @@ export class Almanac {
       return;
     }
     this.previewApp = app;
+    this.cleanupRecovery = attachPixiRecovery(app);
     app.canvas.style.width = '100%';
     app.canvas.style.height = '100%';
     app.canvas.style.display = 'block';

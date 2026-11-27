@@ -2,6 +2,7 @@ import { Application, Container, Graphics, Sprite } from 'pixi.js';
 import { assets, type AssetProgressCb } from '../assets/AssetLoader';
 import { audio } from '../audio/AudioManager';
 import { VIEW_H, VIEW_W } from '../engine/BoardEngine';
+import { attachPixiRecovery } from '../render/pixiRecovery';
 import { UnityAnimator } from '../render/UnityAnimator';
 import { UnityRigInstance } from '../render/UnityRigInstance';
 import { saveManager } from '../save/SaveManager';
@@ -76,6 +77,7 @@ export class ZenGarden {
   private readonly deps: ZenGardenDeps;
 
   private app: Application | null = null;
+  private cleanupRecovery: (() => void) | null = null;
   private bgSprite: Sprite | null = null;
   private slotLayer = new Container();
   private renderedMap = new Map<number, RenderedPlantRig>();
@@ -116,6 +118,7 @@ export class ZenGarden {
       antialias: true,
       preference: 'webgl',
       autoDensity: true,
+      gcActive: false,
       resolution: Math.min(window.devicePixelRatio || 1, 2),
     });
 
@@ -125,6 +128,7 @@ export class ZenGarden {
     }
 
     this.app = app;
+    this.cleanupRecovery = attachPixiRecovery(app);
     app.canvas.style.width = '100%';
     app.canvas.style.height = '100%';
     app.canvas.style.display = 'block';
@@ -788,6 +792,8 @@ export class ZenGarden {
       rec.rig?.destroy();
     }
     this.renderedMap.clear();
+    this.cleanupRecovery?.();
+    this.cleanupRecovery = null;
     if (this.app) {
       this.app.destroy(
         { removeView: true },

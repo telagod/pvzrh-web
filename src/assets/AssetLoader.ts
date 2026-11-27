@@ -114,6 +114,8 @@ class AssetLoader {
   private readonly _domImgCache = new Set<string>();
   private readonly _domImgPromises = new Map<string, Promise<boolean>>();
   private _izLevelsCache: IzLevelEntry[] | null = null;
+  private _restorePromise: Promise<void> | null = null;
+  private _lastRestoreAt = 0;
 
   private async fetchJsonWithProgress<T>(
     url: string,
@@ -285,7 +287,33 @@ class AssetLoader {
     return guarded;
   }
 
-  /** Loads an image into a GPU-backed PixiJS 8 Texture using createImageBitmap for low overhead. */
+  private decodeHtmlImage(relUrl: string, timeoutMs = 15000): Promise<HTMLImageElement | null> {
+    const raw = new Promise<HTMLImageElement | null>((resolve) => {
+      const img = new Image();
+      img.decoding = 'async';
+      const finish = (ok: boolean) => {
+        resolve(ok && img.naturalWidth > 0 ? img : null);
+      };
+      img.onload = () => {
+        if (typeof img.decode === 'function') {
+          img.decode().then(
+            () => finish(true),
+            () => finish(true),
+          );
+        } else {
+          finish(true);
+        }
+      };
+      img.onerror = () => finish(false);
+      img.src = relUrl;
+    });
+    return withTimeout(raw, timeoutMs, null);
+  }
+
+  /**
+   * Loads an image via a durable CPU-backed HTMLImageElement so PixiJS can cleanly
+   * re-upload textures after browser tab switches or WebGL context loss.
+   */
   loadTexture(relUrl: string): Promise<Texture | null> {
     const cached = this._texCache.get(relUrl);
     if (cached) {
@@ -300,27 +328,18 @@ class AssetLoader {
     }
     const task = (async (): Promise<Texture | null> => {
       try {
-        const res = await fetch(relUrl);
-        if (!res.ok) {
+        const img = await this.decodeHtmlImage(relUrl);
+        if (!img) {
           return null;
         }
-        const blob = await res.blob();
-        let tex: Texture;
-        if (typeof createImageBitmap === 'function') {
-          const bmp = await createImageBitmap(blob);
-          const src = new ImageSource({ resource: bmp, alphaMode: 'premultiply-alpha-on-upload' });
-          tex = new Texture({ source: src });
-        } else {
-          const objUrl = URL.createObjectURL(blob);
-          const img = new Image();
-          img.src = objUrl;
-          await new Promise<void>((resolve, reject) => {
-            img.onload = () => resolve();
-            img.onerror = () => reject(new Error(`Image decode failed: ${relUrl}`));
-          });
-          URL.revokeObjectURL(objUrl);
-          tex = Texture.from(img);
-        }
+        const src = new ImageSource({
+          resource: img,
+          alphaMode: 'premultiply-alpha-on-upload',
+        });
+        // PixiJS ImageSource defaults autoGarbageCollect to true inside its constructor;
+        // pin cached textures explicitly since trimCaches() handles memory bounds.
+        src.autoGarbageCollect = false;
+        const tex = new Texture({ source: src });
         this._texCache.set(relUrl, tex);
         return tex;
       } catch {
@@ -331,6 +350,51 @@ class AssetLoader {
     })();
     this._texPromises.set(relUrl, task);
     return task;
+  }
+
+  /**
+   * Restores and forces re-upload of all cached GPU textures after tab switches or
+   * WebGL context restoration. Shared rig atlas sources automatically cover sub-frame sprites.
+   */
+  restoreAllTextures(force = false): Promise<void> {
+    if (this._restorePromise) {
+      return this._restorePromise;
+    }
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (!force && now - this._lastRestoreAt < 120) {
+      return Promise.resolve();
+    }
+    const job = (async () => {
+      try {
+        const entries = [...this._texCache.entries()];
+        for (const [url, tex] of entries) {
+          if (tex.destroyed || tex.source.destroyed) continue;
+          const src = tex.source;
+          const res = src.resource as unknown;
+          if (res instanceof HTMLImageElement && res.complete && res.naturalWidth > 0) {
+            if (typeof res.decode === 'function') {
+              await res.decode().catch(() => {});
+            }
+          } else {
+            const fresh = await this.decodeHtmlImage(url);
+            if (fresh) {
+              src.resource = fresh;
+            }
+          }
+          src.autoGarbageCollect = false;
+          try {
+            src.unload();
+          } catch {
+            // Safe no-op if already unloaded or context lost
+          }
+        }
+        this._lastRestoreAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      } finally {
+        this._restorePromise = null;
+      }
+    })();
+    this._restorePromise = job;
+    return job;
   }
 
   loadPlantRig(id: number): Promise<LoadedRig | null> {

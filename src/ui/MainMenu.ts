@@ -2,6 +2,7 @@ import { Application, Container, Sprite } from 'pixi.js';
 import { assets, type AssetProgressCb } from '../assets/AssetLoader';
 import { audio } from '../audio/AudioManager';
 import { VIEW_H, VIEW_W } from '../engine/BoardEngine';
+import { attachPixiRecovery } from '../render/pixiRecovery';
 import {
   DIFFICULTY_LEVELS,
   clampDifficulty,
@@ -31,6 +32,7 @@ export class MainMenu {
   private readonly deps: MainMenuDeps;
 
   private app: Application | null = null;
+  private cleanupRecovery: (() => void) | null = null;
   private clouds: Sprite[] = [];
   private waterSprite: Sprite | null = null;
   private waterBaseScaleX = 1;
@@ -64,6 +66,7 @@ export class MainMenu {
       antialias: true,
       preference: 'webgl',
       autoDensity: true,
+      gcActive: false,
       resolution: Math.min(window.devicePixelRatio || 1, 2),
     });
 
@@ -73,6 +76,7 @@ export class MainMenu {
     }
 
     this.app = app;
+    this.cleanupRecovery = attachPixiRecovery(app);
     app.canvas.style.width = '100%';
     app.canvas.style.height = '100%';
     app.canvas.style.display = 'block';
@@ -695,6 +699,8 @@ export class MainMenu {
     this.waterSprite = null;
     this.endoflameSprite = null;
     this.squalourSprite = null;
+    this.cleanupRecovery?.();
+    this.cleanupRecovery = null;
     if (this.app) {
       this.app.destroy(
         { removeView: true },
